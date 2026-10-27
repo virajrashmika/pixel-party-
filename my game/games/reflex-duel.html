@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Reflex Duel - Pixel Party</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+/* Layout: one big neon arcade screen on top, two player panels below - one per half of the keyboard.
+   Shared colors, fonts, buttons and kbd come from css/style.css; only game-specific styles are here. */
+.wrap{max-width:1600px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+.screen{display:grid;place-items:center}
+canvas{
+  display:block;cursor:pointer;border-radius:14px;background:#07060f;
+  box-shadow:0 0 0 1px var(--edge),0 18px 50px rgba(0,0,0,.55),0 0 40px rgba(180,92,255,.12)
+}
+.low-fx canvas{box-shadow:0 0 0 1px var(--edge)}
+.players{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:1040px;width:100%;margin:0 auto}
+.player{
+  --c:var(--p1);--glow:rgba(255,122,89,.35);
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01)),var(--panel);
+  border:1px solid var(--edge);border-radius:16px;padding:16px 18px;display:grid;gap:12px;min-width:0
+}
+.player.two{--c:var(--p2);--glow:rgba(79,209,232,.35)}
+.player h2{font-family:var(--font-title);font-weight:400;font-size:18px;letter-spacing:.06em;margin:0;color:var(--c)}
+.player h2 span{color:var(--muted);font-family:var(--font-ui);font-weight:700;font-size:14px;letter-spacing:.12em}
+.player h2 .pname{color:inherit;font-family:var(--font-title);font-weight:400;font-size:18px;letter-spacing:.06em;text-shadow:0 0 12px var(--glow)}
+.keys{display:flex;flex-wrap:wrap;align-items:center;gap:10px;color:var(--muted)}
+.tap{
+  font-family:var(--font-title);font-size:16px;letter-spacing:.1em;padding:16px;border:0;border-radius:12px;cursor:pointer;
+  color:#07060f;background:var(--c);box-shadow:0 0 22px var(--glow);
+  touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:transform .08s
+}
+.tap:active{transform:translateY(2px) scale(.99)}
+.low-fx .tap{box-shadow:none}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px 28px;max-width:1040px;width:100%;margin:0 auto}
+.notes h3{font-family:var(--font-title);font-weight:400;font-size:15px;letter-spacing:.08em;color:var(--ruler);margin:0 0 8px}
+.notes p{margin:0;color:var(--muted);max-width:60ch}
+.notes b{color:var(--ink);font-weight:700}
+.cpu-note{margin:0;color:var(--muted)}
+.cpu-note b{color:var(--c);font-weight:700}
+@media (prefers-reduced-motion:reduce){.tap:active{transform:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="a">REFLEX</span> <span class="b">DUEL</span></h1>
+      <p class="tag">Two players, one keyboard. First to 3 catches wins.</p>
+    </div>
+    <div class="actions">
+      <a class="btn" id="back" href="../index.html">BACK TO MENU (ESC)</a>
+      <button class="btn" id="sound" type="button" aria-pressed="true">SOUND ON</button>
+    </div>
+  </header>
+
+  <div class="screen">
+    <canvas id="screen" tabindex="0" aria-label="Reflex Duel game screen. Click to give the game the keyboard."></canvas>
+  </div>
+
+  <div class="players">
+    <section class="player one">
+      <h2><span class="pname" id="pname1">PLAYER 1</span> <span>· LEFT HAND</span></h2>
+      <div class="keys"><kbd>F</kbd> catch</div>
+      <button class="tap" type="button" id="tap1" data-tap="0">TAP TO CATCH</button>
+    </section>
+    <section class="player two">
+      <h2><span class="pname" id="pname2">PLAYER 2</span> <span>· RIGHT HAND</span></h2>
+      <div class="keys"><kbd>K</kbd> or <kbd>Num 0</kbd> catch</div>
+      <button class="tap" type="button" id="tap2" data-tap="1">TAP TO CATCH</button>
+    </section>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>HOW TO PLAY</h3>
+      <p>Both players press their key to get ready. Each ruler hangs from a clip. After a random wait, <b>both rulers drop at the same moment</b>. Catch yours first to win the point. Press during the wait and your opponent gets the point.</p>
+    </div>
+    <div>
+      <h3>THE NUMBERS ARE REAL</h3>
+      <p>A dropped ruler falls <b>d = ½·g·t²</b>, the same as the school ruler test. 200 ms means 19.6 cm, 250 ms means 30.7 cm, and after 319 ms the 50 cm ruler slips right through your fingers.</p>
+    </div>
+    <div>
+      <h3>KEYBOARD TIP</h3>
+      <p>If one player's key stops working while the other holds theirs, the keyboard is "ghosting". Player 2 can switch from <b>K</b> to <b>Num 0</b>.</p>
+    </div>
+  </div>
+</div>
+
+<script src="../js/players.js"></script>
+<script src="../js/fx.js"></script>
+<script>
+(() => {
+  // The game still thinks in a 320 x 180 screen; js/fx.js draws it sharp at full resolution.
+  const W = 320, H = 180;
+  const cvs = document.getElementById('screen');
+  const header = document.querySelector('header');
+  const st = FX.stage(cvs, { width: W, height: H, margin: () => header.offsetHeight + 64 });
+  const ctx = st.ctx;
+
+  const css = getComputedStyle(document.documentElement);
+  const C = {};
+  ['screen','line','ink','muted','bad','p1','p2','ruler','neon']
+    .forEach(k => C[k] = css.getPropertyValue('--' + k).trim());
+  const PC = [C.p1, C.p2];
+  const SKIN = '#f2b38c', SKIN_DARK = '#b9775a', NAIL = '#ffd9c4';
+
+  // ---------- Player names: come from the page address, e.g. ?p1=VIRAJ&p2=KASUN ----------
+  const fromURL = Players.fromURL();
+  const NAMES = fromURL || Players.DEFAULTS.slice();   // opened directly: P1 / P2
+  document.getElementById('pname1').textContent = NAMES[0];
+  document.getElementById('pname2').textContent = NAMES[1];
+
+  // Back to menu keeps the names, so the menu opens straight on the game tiles
+  const backLink = document.getElementById('back');
+  if (fromURL) backLink.href = '../index.html' + Players.toQuery(NAMES, Players.cpuFromURL());
+
+  // ---------- Controls: left half vs right half of the keyboard ----------
+  const KEYS = [['KeyF'], ['KeyK', 'Numpad0']];
+  const KEY_LABEL = ['F', 'K'];
+
+  // ---------- 1 player mode: player 2 is the computer (CPU) ----------
+  // The level comes from the page address (?cpu=normal); null = two people are playing.
+  const CPU = Players.cpuFromURL();
+  const CPU_LEVELS = {
+    // reaction: how fast the CPU catches (ms, a random number between the two)
+    // early: the chance that it gets nervous and grabs too early (you get a free point)
+    easy:   { reaction: [270, 400], early: 0.10 },
+    normal: { reaction: [205, 300], early: 0.05 },
+    hard:   { reaction: [165, 235], early: 0.02 }
+  };
+  const cpu = { catchAt: null, earlyAt: null, readyAt: null };   // what the CPU plans to do, and when
+  if (CPU) {
+    const level = CPU.toUpperCase();
+    document.querySelector('header .tag').textContent = 'You against the CPU (' + level + '). First to 3 catches wins.';
+    const two = document.querySelector('.player.two');
+    two.querySelector('.keys').outerHTML = '<p class="cpu-note">Played by the computer. Level: <b>' + level + '</b>. Change it on the menu.</p>';
+    two.querySelector('.tap').hidden = true;
+    two.querySelector('h2 span:last-child').textContent = '· COMPUTER';
+  }
+  // what the plate under player 2's hand says while waiting for a press
+  const pressText = p => (CPU && p === 1 ? 'WAITING' : 'PRESS ' + KEY_LABEL[p]);
+
+  // ---------- Timing (milliseconds) ----------
+  const WIN_SCORE = 3;
+  const INTRO = 700, GRACE = 400, WAIT_MIN = 1500, WAIT_RANGE = 3000;
+  const ROUND_TIMEOUT = 1500, AFTER_FIRST = 800, RESULT_HOLD = 2400;
+
+  // ---------- Ruler: 50 cm, 2 screen units per cm ----------
+  const PX_PER_CM = 2, RULER_CM = 50, RULER_W = 16;
+  const RULER_TOP = 50, HAND_Y = RULER_TOP + RULER_CM * PX_PER_CM; // 150
+  const LANE_X = [80, 240];
+  const cmFromMs = ms => 490.5 * (ms / 1000) ** 2;   // d = ½ g t², g = 981 cm/s²
+
+  // ---------- Game state ----------
+  const S = {
+    state: 'title', ready: [false, false], score: [0, 0], best: [null, null],
+    round: 0, waitStart: 0, dropAt: 0, goAt: null, times: [null, null],
+    winner: -1, early: -1, firstAt: 0, resultAt: 0, matchWinner: -1
+  };
+
+  function newMatch(now) {
+    S.score = [0, 0]; S.best = [null, null]; S.round = 0; S.matchWinner = -1;
+    S.ready = [false, false];
+    startRound(now);
+  }
+  function startRound(now) {
+    S.round++;
+    S.state = 'wait';
+    S.waitStart = now;
+    S.dropAt = now + INTRO + WAIT_MIN + Math.random() * WAIT_RANGE;
+    S.goAt = null; S.times = [null, null]; S.winner = -1; S.early = -1;
+    if (CPU) {                                       // will the CPU jump the gun this round? If so, when?
+      cpu.catchAt = null;
+      const from = now + INTRO + GRACE, to = S.dropAt - 150;
+      cpu.earlyAt = Math.random() < CPU_LEVELS[CPU].early ? from + Math.random() * (to - from) : null;
+    }
+  }
+
+  // The CPU "presses its key" through the same press() as a person, so it follows the same rules.
+  function cpuThink(ts) {
+    const L = CPU_LEVELS[CPU];
+    if ((S.state === 'title' || S.state === 'over') && S.ready[0] && !S.ready[1]) {
+      if (cpu.readyAt == null) cpu.readyAt = ts + 400;   // gets ready a moment after you
+      if (ts >= cpu.readyAt) { cpu.readyAt = null; press(1, ts); }
+    }
+    if (S.state === 'wait' && cpu.earlyAt != null && ts >= cpu.earlyAt) {
+      const t = cpu.earlyAt; cpu.earlyAt = null; press(1, t);
+    }
+    if (S.state === 'go' && S.times[1] == null) {
+      if (cpu.catchAt == null) cpu.catchAt = S.goAt + L.reaction[0] + Math.random() * (L.reaction[1] - L.reaction[0]);
+      if (ts >= cpu.catchAt) press(1, cpu.catchAt);
+    }
+  }
+  function endRound(now) {
+    if (S.winner >= 0) S.score[S.winner]++;
+    S.times.forEach((t, p) => { if (t != null && (S.best[p] == null || t < S.best[p])) S.best[p] = t; });
+    S.state = 'result'; S.resultAt = now;
+    const m = S.score.findIndex(s => s >= WIN_SCORE);
+    if (m >= 0) { S.matchWinner = m; sfx.win(); }
+    else if (S.early >= 0) sfx.early();
+    else if (S.winner >= 0) sfx.point();
+    else sfx.none();
+    effects.roundEnd(m);
+  }
+
+  function press(p, t) {
+    const now = performance.now();
+    switch (S.state) {
+      case 'title':
+      case 'over':
+        if (!S.ready[p]) { S.ready[p] = true; sfx.ready(p); effects.ready(p); }
+        if (S.ready[0] && S.ready[1]) newMatch(now);
+        break;
+      case 'wait':
+        if (t < S.waitStart + GRACE) return;           // still letting go of the ready press
+        S.early = p; S.winner = 1 - p; S.goAt = null;
+        endRound(now);
+        effects.tooEarly(p);
+        break;
+      case 'go':
+        if (S.times[p] != null) return;
+        if (t < S.goAt) {                              // pressed before the drop was on screen
+          S.early = p; S.winner = 1 - p; S.goAt = null; S.times = [null, null];
+          endRound(now); effects.tooEarly(p); return;
+        }
+        S.times[p] = t - S.goAt;
+        if (S.winner < 0) { S.winner = p; S.firstAt = now; }
+        sfx.catch(p);
+        effects.caught(p);
+        break;
+    }
+  }
+
+  // ---------- Input ----------
+  addEventListener('keydown', e => {
+    if (e.code === 'Escape') { location.href = backLink.href; return; }
+    if (e.repeat) return;
+    const p = KEYS[0].includes(e.code) ? 0 : KEYS[1].includes(e.code) ? 1 : -1;
+    if (p < 0 || (CPU && p === 1)) return;           // 1 player mode: the CPU presses for player 2
+    e.preventDefault();
+    unlockAudio();
+    press(p, e.timeStamp);
+  });
+  document.querySelectorAll('[data-tap]').forEach(b => {
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault(); unlockAudio();
+      if (CPU && b.dataset.tap === '1') return;
+      press(+b.dataset.tap, e.timeStamp);
+    });
+  });
+  let focused = document.hasFocus();
+  addEventListener('focus', () => focused = true);
+  addEventListener('blur', () => focused = false);
+  cvs.addEventListener('pointerdown', () => { cvs.focus(); focused = true; unlockAudio(); });
+
+  // ---------- Sound (tiny square-wave blips) ----------
+  let ac = null, muted = false;
+  function unlockAudio() {
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; } }
+    if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+  }
+  function tone(f, dur, type = 'square', vol = 0.05, slide = 0, delay = 0) {
+    if (!ac || muted) return;
+    const t0 = ac.currentTime + delay;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (slide) o.frequency.linearRampToValueAtTime(Math.max(40, f + slide), t0 + dur);
+    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    ready: p => tone(p ? 660 : 520, 0.08),
+    drop: () => tone(900, 0.22, 'square', 0.04, -520),
+    catch: p => tone(p ? 990 : 780, 0.06, 'square', 0.06),
+    early: () => tone(170, 0.3, 'sawtooth', 0.05, -70),
+    point: () => { tone(660, 0.08); tone(990, 0.12, 'square', 0.05, 0, 0.09); },
+    none: () => tone(220, 0.15, 'triangle', 0.06),
+    win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.13, 'square', 0.05, 0, i * 0.11))
+  };
+  const soundBtn = document.getElementById('sound');
+  soundBtn.addEventListener('click', () => {
+    muted = !muted; unlockAudio();
+    soundBtn.textContent = muted ? 'SOUND OFF' : 'SOUND ON';
+    soundBtn.setAttribute('aria-pressed', String(!muted));
+  });
+
+  // =====================================================================
+  // EFFECTS: only looks, they never change the game
+  // =====================================================================
+  const anim = { catchAt: [null, null], pipAt: [-9e9, -9e9], readyAt: [-9e9, -9e9], overAt: 0, confettiAt: 0, dropFxAt: -9e9 };
+  const now = () => performance.now();
+  const effects = {
+    ready(p) { anim.readyAt[p] = now(); FX.sparks(LANE_X[p], 166, { color: PC[p], count: 10, speed: 60, gravity: 30 }); },
+    caught(p) {                                        // spark burst + small shake + big reaction time
+      anim.catchAt[p] = now();
+      const x = LANE_X[p];
+      FX.sparks(x, 146, { color: PC[p], count: 26, speed: 130, gravity: 90 });
+      FX.sparks(x, 146, { color: '#ffffff', count: 8, speed: 80 });
+      FX.shake(0.28);
+      FX.text(Math.round(S.times[p]) + ' MS', x, 118, { color: PC[p], size: 20, life: 1.2, rise: 14 });
+    },
+    tooEarly(p) {                                      // red flash + shaking "TOO EARLY!"
+      FX.flash(C.bad, 0.3, 0.4);
+      FX.shake(0.45);
+      FX.text('TOO EARLY!', LANE_X[p], 126, { color: C.bad, size: 16, life: 1.3, shake: 7, rise: 6 });
+    },
+    roundEnd(m) {
+      if (S.winner >= 0) anim.pipAt[S.winner] = now();
+      if (m >= 0) {                                    // match won: confetti in the winner's color
+        FX.confetti(W / 2, 110, { colors: [PC[m], FX.mix(PC[m], '#ffffff', 0.5), C.ruler], count: 120, speed: 230 });
+        FX.shake(0.35);
+      }
+    },
+    drop() {
+      anim.dropFxAt = now();
+      for (const x of LANE_X) FX.sparks(x, 46, { color: C.ruler, count: 6, speed: 50, gravity: 60 });
+    }
+  };
+
+  // =====================================================================
+  // DRAWING
+  // =====================================================================
+  const GOLD = C.ruler, DISPLAY = FX.FONT_DISPLAY, BODY = FX.FONT_BODY;
+
+  // ----- shapes drawn once with their glow, then reused every frame -----
+  const SH = {
+    ruler: () => FX.shape('rd-ruler', RULER_W, RULER_CM * PX_PER_CM, g => {
+      const h = RULER_CM * PX_PER_CM;
+      const grad = g.createLinearGradient(0, 0, RULER_W, 0);
+      grad.addColorStop(0, '#ffd866'); grad.addColorStop(0.6, GOLD); grad.addColorStop(1, '#d99a24');
+      FX.roundRect(g, 0, 0, RULER_W, h, 2.5); g.fillStyle = grad; g.fill();
+      g.strokeStyle = '#b8862a'; g.lineWidth = 0.5; g.stroke();
+      g.fillStyle = '#3b2a10';
+      g.font = `700 6px ${BODY}`; g.textBaseline = 'middle';
+      for (let cm = 1; cm < RULER_CM; cm++) {       // cm marks, counted up from the bottom
+        const y = h - cm * PX_PER_CM;
+        const len = cm % 10 === 0 ? 7 : cm % 5 === 0 ? 4.5 : 2.5;
+        g.fillRect(0, y - 0.25, len, 0.5);
+        if (cm % 10 === 0) g.fillText(String(cm), 8.2, y + 0.3);
+      }
+    }, { color: GOLD, glow: 5 }),
+    finger: () => FX.shape('rd-finger', 6, 14, g => {
+      FX.roundRect(g, 0, 0, 6, 14, 3); g.fillStyle = SKIN; g.fill();
+      g.strokeStyle = SKIN_DARK; g.lineWidth = 0.6; g.stroke();
+      FX.roundRect(g, 1.2, 1.2, 3.6, 3.2, 1.5); g.fillStyle = NAIL; g.fill();
+    }, { glow: 0 }),
+    palm: () => FX.shape('rd-palm', 34, 11, g => {
+      FX.roundRect(g, 0, 0, 34, 11, 5.5); g.fillStyle = SKIN_DARK; g.fill();
+      FX.roundRect(g, 1, 0.6, 32, 7, 3.5); g.fillStyle = SKIN; g.fill();
+    }, { glow: 0 }),
+    cuff: p => FX.shape('rd-cuff' + p, 28, 3.5, g => { FX.roundRect(g, 0, 0, 28, 3.5, 1.75); g.fillStyle = PC[p]; g.fill(); }, { color: PC[p], glow: 4 }),
+    clamp: () => FX.shape('rd-clamp', RULER_W + 20, 2.4, g => { FX.roundRect(g, 0, 0, RULER_W + 20, 2.4, 1.2); g.fillStyle = '#9b95c9'; g.fill(); }, { color: C.neon, glow: 3 }),
+    jaw: () => FX.shape('rd-jaw', 5, 9, g => { FX.roundRect(g, 0, 0, 5, 9, 1.6); g.fillStyle = '#7d78a8'; g.fill(); }, { glow: 0 }),
+    pipOn: p => FX.shape('rd-pip' + p, 7, 7, g => { g.fillStyle = PC[p]; g.beginPath(); g.arc(3.5, 3.5, 3.5, 0, Math.PI * 2); g.fill(); }, { color: PC[p], glow: 4 }),
+    pipOff: () => FX.shape('rd-pipoff', 7, 7, g => { g.strokeStyle = '#4a4380'; g.lineWidth = 0.9; g.beginPath(); g.arc(3.5, 3.5, 3, 0, Math.PI * 2); g.stroke(); }, { glow: 0 })
+  };
+
+  // (cached) glowing text helper
+  const T = (s, x, y, color, size = 8, o = {}) => FX.drawText(ctx, s, x, y, Object.assign({ size, color }, o));
+
+  function dropCm(p, ts) {
+    if (S.goAt == null) return 0;
+    const ms = S.times[p] != null ? S.times[p] : (S.state === 'go' ? ts - S.goAt : 9999);
+    return cmFromMs(Math.max(0, ms));
+  }
+
+  function drawBackground(ts) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0b0819'); g.addColorStop(0.6, '#120d2a'); g.addColorStop(1, '#07060f');
+    ctx.fillStyle = g; ctx.fillRect(-10, -10, W + 20, H + 20);
+    ctx.strokeStyle = FX.rgba(C.neon, 0.07); ctx.lineWidth = 0.4;     // faint grid
+    for (let x = 0; x <= W; x += 16) { ctx.beginPath(); ctx.moveTo(x, 23); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 31; y <= H; y += 16) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    if (!FX.low) {                                    // soft spotlight under each lane
+      ctx.globalCompositeOperation = 'lighter';
+      LANE_X.forEach((x, p) => { ctx.globalAlpha = 0.16; ctx.drawImage(FX.glowDot(PC[p]), x - 60, 70, 120, 120); });
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
+    // centre line: flashes gold the moment the rulers drop
+    const flash = S.state === 'go' && ts - S.goAt < 120;
+    ctx.strokeStyle = flash ? GOLD : FX.rgba(C.neon, 0.45);
+    ctx.lineWidth = flash ? 1.6 : 0.8;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(160, 26); ctx.lineTo(160, H); ctx.stroke();
+    ctx.setLineDash([]);
+    if (flash && !FX.low) { ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(FX.glowDot(GOLD), 140, 26, 40, H - 26); ctx.globalCompositeOperation = 'source-over'; }
+  }
+
+  function drawHud() {
+    const g = ctx.createLinearGradient(0, 0, 0, 23);
+    g.addColorStop(0, 'rgba(14,12,28,.95)'); g.addColorStop(1, 'rgba(14,12,28,.75)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 23);
+    ctx.fillStyle = FX.rgba(C.neon, 0.6); ctx.fillRect(0, 22.6, W, 0.5);
+    T(NAMES[0], 7, 11.5, C.p1, 10, { align: 'left' });
+    T(NAMES[1], W - 7, 11.5, C.p2, 10, { align: 'right' });
+    // score pips just after each name; a new point pops in
+    const w0 = FX.textSprite(NAMES[0], { size: 10, color: C.p1 }).w, w1 = FX.textSprite(NAMES[1], { size: 10, color: C.p2 }).w;
+    for (let i = 0; i < WIN_SCORE; i++) {
+      [[7 + w0 + 8 + i * 10, 0], [W - 7 - w1 - 8 - i * 10, 1]].forEach(([x, p]) => {
+        const on = S.score[p] > i;
+        const fresh = on && i === S.score[p] - 1 ? Math.min(1, (now() - anim.pipAt[p]) / 350) : 1;
+        FX.drawShape(ctx, on ? SH.pipOn(p) : SH.pipOff(), x, 11.5, { scale: on ? Math.max(0.01, FX.ease.outElastic(fresh)) : 1 });
+      });
+    }
+    const mid = (S.state === 'title') ? 'BEST OF 5' : (S.state === 'over' ? 'MATCH OVER' : 'ROUND ' + S.round);
+    T(mid, W / 2, 11.5, C.muted, 8, { glow: 0 });
+  }
+
+  function drawLane(p, ts) {
+    const x = LANE_X[p], rx = x - RULER_W / 2;
+    const dropped = S.goAt != null;
+    const caught = S.times[p] != null;
+    const cm = dropCm(p, ts);
+
+    // clip that holds the ruler; its jaws spring open on the drop
+    FX.drawShape(ctx, SH.clamp(), x, 41, { ay: 0.5 });
+    const open = dropped ? 4 * FX.ease.outBack(Math.min(1, (ts - S.goAt) / 160)) : 0;
+    FX.drawShape(ctx, SH.jaw(), rx - 2.5 - open, 46.5);
+    FX.drawShape(ctx, SH.jaw(), rx + RULER_W + 2.5 + open, 46.5);
+
+    // palm behind the ruler
+    FX.drawShape(ctx, SH.palm(), x, 156, { ay: 0 });
+
+    // the ruler, with motion blur while it falls
+    const ry = RULER_TOP + cm * PX_PER_CM;
+    if (ry < H) {
+      if (S.state === 'go' && dropped && !caught) {
+        const speed = 1962 * Math.max(0, ts - S.goAt) / 1000;   // screen units per second (2 units per cm)
+        for (let i = 4; i >= 1; i--) FX.drawShape(ctx, SH.ruler(), rx, ry - speed * 0.007 * i, { ax: 0, ay: 0, alpha: 0.07 * (5 - i) });
+      }
+      FX.drawShape(ctx, SH.ruler(), rx, ry, { ax: 0, ay: 0 });
+    }
+
+    // thumb and finger snap shut on the catch (with a little overshoot)
+    let gap = 5;
+    if (caught && anim.catchAt[p] != null) gap = 5 * (1 - FX.ease.outBack(Math.min(1, (now() - anim.catchAt[p]) / 110)));
+    else if (caught) gap = 0;
+    gap = Math.max(-0.6, gap);
+    FX.drawShape(ctx, SH.finger(), rx - 3 - gap, 146.5);
+    FX.drawShape(ctx, SH.finger(), rx + RULER_W + 3 + gap, 146.5);
+    FX.drawShape(ctx, SH.cuff(p), x, 166, { ay: 0 });
+
+    // readout under the hand
+    const col = PC[p];
+    let l1 = '', l2 = '', c1 = col, c2 = C.muted;
+    if (S.state === 'title') {
+      l1 = S.ready[p] ? 'READY!' : pressText(p);
+      c1 = S.ready[p] ? col : C.ink;
+    } else if (S.state === 'over') {
+      l1 = S.best[p] != null ? 'BEST ' + Math.round(S.best[p]) + ' MS' : 'NO CATCH';
+      l2 = S.ready[p] ? 'READY!' : pressText(p);
+      c2 = S.ready[p] ? col : C.ink;
+    } else if (S.early === p) {
+      l1 = 'TOO EARLY!'; c1 = C.bad; l2 = 'POINT LOST';
+    } else if (S.early >= 0) {
+      l1 = 'FREE POINT';
+    } else if (caught) {
+      l1 = Math.round(S.times[p]) + ' MS';
+      c1 = (S.winner === p) ? col : C.muted;
+      l2 = cm <= RULER_CM ? cm.toFixed(1) + ' CM' : 'DROPPED';
+    } else if (S.state === 'result') {
+      l1 = 'MISSED'; c1 = C.muted;
+    } else {
+      l1 = CPU && p === 1 ? 'CPU ' + CPU.toUpperCase() : 'KEY ' + KEY_LABEL[p]; c1 = '#5b5490';
+    }
+    // shown on a small dark plate beside the hand (outer side), so the ruler never covers it
+    const ox = p === 0 ? 33 : W - 33, PW = 58;
+    FX.roundRect(ctx, ox - PW / 2, 141, PW, 24, 4);
+    ctx.fillStyle = 'rgba(10,8,24,.85)'; ctx.fill();
+    ctx.strokeStyle = FX.rgba(col, 0.35); ctx.lineWidth = 0.5; ctx.stroke();
+    const fit = (s, size) => Math.min(1, (PW - 8) / Math.max(1, FX.textSprite(s, { size, color: '#fff' }).w));
+    const readyPop = S.ready[p] && S.state === 'title' ? Math.max(0.01, FX.ease.outBack(Math.min(1, (now() - anim.readyAt[p]) / 300))) : 1;
+    T(l1, ox, l2 ? 149 : 153, c1, 8, { scale: fit(l1, 8) * readyPop });
+    if (l2) T(l2, ox, 159, c2, 6, { glow: 0, scale: fit(l2, 6) });
+    if (S.state === 'result' && S.winner === p && S.early < 0) {
+      T('★', ox + (p === 0 ? PW / 2 - 2 : -PW / 2 + 2), 141, col, 9);   // star on the winner's plate
+    }
+  }
+
+  // a dark glass panel with a neon edge
+  function panel(x, y, w, h, color = C.neon) {
+    FX.roundRect(ctx, x, y, w, h, 5);
+    ctx.fillStyle = 'rgba(10,8,24,.88)'; ctx.fill();
+    ctx.strokeStyle = FX.rgba(color, 0.7); ctx.lineWidth = 0.7; ctx.stroke();
+  }
+
+  function drawCenter(ts) {
+    const cx = W / 2;
+    if (S.state === 'title') {
+      panel(98, 56, 124, 72);
+      const bob = Math.sin(FX.time * 2.5) * 1.5;
+      T('REFLEX', cx, 74 + bob, C.p1, 18);
+      T('DUEL', cx, 95 - bob, C.p2, 18);
+      T('FIRST TO 3', cx, 116, C.muted, 7, { glow: 0 });
+      return;
+    }
+    // The rulers sit at x 72-88 and 232-248, so a centre panel may grow up to x 90-230.
+    if (S.state === 'over') {
+      const m = S.matchWinner;
+      panel(92, 54, 136, 74, PC[m]);
+      const enter = Math.min(1, (now() - anim.overAt) / 900);   // the name drops in and bounces
+      const y = FX.lerp(40, 76, FX.ease.outBounce(enter)) - (enter >= 1 ? Math.abs(Math.sin(FX.time * 3.2)) * 3 : 0);
+      const nameSize = Math.min(20, 118 / Math.max(1, FX.textSprite(NAMES[m], { size: 20 }).w / 20));
+      T(NAMES[m], cx, y, PC[m], nameSize);
+      T('WINS!', cx, 98, PC[m], 15, { scale: 1 + Math.sin(FX.time * 6) * 0.04 });
+      T(CPU ? 'PRESS ' + KEY_LABEL[0] : 'BOTH PRESS', cx, 117, C.muted, 7, { glow: 0 });
+      return;
+    }
+    let msg = '', col = C.muted, size = 9, scale = 1;
+    if (S.state === 'wait') {
+      if (ts - S.waitStart < INTRO) { msg = 'ROUND ' + S.round; col = C.ink; size = 11; scale = Math.max(0.01, FX.ease.outBack(Math.min(1, (ts - S.waitStart) / 300))); }
+      else msg = 'WAIT' + '.'.repeat(1 + Math.floor((ts / 400) % 3));
+    } else if (S.state === 'go') {
+      msg = 'DROP!'; col = GOLD; size = 14; scale = Math.max(0.01, FX.ease.outBack(Math.min(1, (ts - S.goAt) / 200)));
+    } else if (S.state === 'result') {
+      if (S.winner >= 0) { msg = NAMES[S.winner] + ' POINT'; col = PC[S.winner]; }
+      else msg = 'NO POINT';
+      scale = Math.max(0.01, FX.ease.outBack(Math.min(1, (ts - S.resultAt) / 300)));
+    }
+    const tw = FX.textSprite(msg, { size, color: col }).w;
+    const bw = Math.min(138, Math.max(112, tw * Math.min(1, scale) + 18));
+    panel(cx - bw / 2, 78, bw, 26, S.state === 'result' && S.winner >= 0 ? col : C.neon);
+    T(msg, cx, 91, col, size, { scale: Math.min(scale, (bw - 10) / tw) });
+  }
+
+  function draw(ts) {
+    st.begin();
+    drawBackground(ts);
+    drawLane(0, ts); drawLane(1, ts);
+    drawCenter(ts);
+    FX.draw(ctx);                                     // sparks, confetti and pop-up texts
+    st.steady();                                      // the score bar doesn't shake
+    drawHud();
+    if (!focused) {
+      ctx.fillStyle = 'rgba(7,6,15,.8)'; ctx.fillRect(0, 23, W, H - 23);
+      T('CLICK HERE TO PLAY', W / 2, 96, C.ink, 11);
+      T('SO THE KEYBOARD GOES TO THE GAME', W / 2, 110, C.muted, 7, { glow: 0 });
+    }
+    st.end();
+  }
+
+  // ---------- Game loop ----------
+  let lastTs = null;
+  function loop(ts) {
+    if (S.state === 'wait' && ts >= S.dropAt) {
+      S.state = 'go'; S.goAt = ts; S.times = [null, null]; sfx.drop(); effects.drop();
+    }
+    if (CPU) cpuThink(ts);
+    if (S.state === 'go') {
+      const both = S.times[0] != null && S.times[1] != null;
+      if (both || ts - S.goAt > ROUND_TIMEOUT || (S.winner >= 0 && performance.now() - S.firstAt > AFTER_FIRST)) endRound(ts);
+    }
+    if (S.state === 'result' && ts - S.resultAt > RESULT_HOLD) {
+      if (S.matchWinner >= 0) { S.state = 'over'; S.ready = [false, false]; anim.overAt = now(); }
+      else startRound(ts);
+    }
+    // winner screen: keep the confetti coming
+    if (S.state === 'over' && now() - anim.confettiAt > 1400) {
+      anim.confettiAt = now();
+      const m = S.matchWinner;
+      FX.confettiRain(0, W, 0, { colors: [PC[m], FX.mix(PC[m], '#ffffff', 0.5), C.ruler], count: 26 });
+    }
+    FX.update(lastTs == null ? 0 : (ts - lastTs) / 1000);
+    lastTs = ts;
+    draw(ts);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>

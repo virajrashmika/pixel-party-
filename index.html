@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel Party</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+/* Menu-only styles. Shared colors, fonts, buttons and the switch live in css/style.css */
+
+/* animated background canvas behind everything */
+#bg{position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;display:block}
+
+.topbar{display:flex;justify-content:flex-end}
+.top{text-align:center;display:grid;gap:6px;margin-top:-8px}
+.logo{
+  font-family:var(--font-title);font-weight:400;font-size:clamp(40px,9vw,84px);line-height:1;margin:0;letter-spacing:.04em;
+  background:linear-gradient(90deg,var(--p1),var(--pink) 50%,var(--p2));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 22px rgba(255,79,216,.35));
+}
+.top .tag{font-size:20px;letter-spacing:.04em}
+
+/* glassy panels */
+.card,.welcome{
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015)),rgba(18,15,38,.86);
+  border:1px solid var(--edge);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.45)
+}
+
+/* ---------- Screen 1: player names ---------- */
+.card{padding:24px;max-width:700px;width:100%;margin:0 auto;display:grid;gap:18px}
+.card-title{font-family:var(--font-title);font-weight:400;font-size:20px;letter-spacing:.1em;margin:0;color:var(--ink)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+.field{--c:var(--p1);--glow:rgba(255,122,89,.35);display:grid;gap:8px;min-width:0}
+.field.two{--c:var(--p2);--glow:rgba(79,209,232,.35)}
+.field label{font-weight:700;font-size:14px;letter-spacing:.16em;color:var(--c)}
+.field input{
+  width:100%;font-family:var(--font-title);font-size:26px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink);background:rgba(7,6,15,.75);border:2px solid var(--c);border-radius:12px;padding:12px 16px;
+  box-shadow:0 0 16px var(--glow),inset 0 0 14px rgba(0,0,0,.6);
+  transition:box-shadow .2s,border-color .2s;
+}
+.field input::placeholder{color:rgba(241,236,255,.18)}
+.field input:focus{outline:none;box-shadow:0 0 0 3px var(--glow),0 0 30px var(--glow),inset 0 0 14px rgba(0,0,0,.6)}
+.field input[aria-invalid="true"]{--c:var(--bad);--glow:rgba(255,79,109,.4)}
+.error{margin:0;min-height:1.4em;color:var(--bad);font-weight:600}
+.rules{margin:0;color:var(--muted)}
+.card .btn-big{justify-self:end}
+/* 1 PLAYER / 2 PLAYERS and EASY / NORMAL / HARD: a row of buttons where one is picked */
+.seg-row{display:flex;gap:8px;flex-wrap:wrap}
+.seg{
+  --c:var(--neon);flex:1 1 0;min-width:0;font-family:var(--font-title);font-size:15px;letter-spacing:.1em;
+  color:var(--muted);background:rgba(7,6,15,.6);border:1px solid var(--edge);border-radius:12px;padding:12px 10px;cursor:pointer;
+  transition:color .15s,border-color .15s,box-shadow .15s
+}
+.seg:hover{color:var(--ink)}
+.seg[aria-checked="true"]{color:var(--ink);border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 0 18px rgba(180,92,255,.35)}
+.seg-row.levels .seg{--c:var(--p2);padding:14px 6px}
+.seg-row.levels .seg[aria-checked="true"]{box-shadow:0 0 0 1px var(--c),0 0 18px rgba(79,209,232,.35)}
+.field .label{font-weight:700;font-size:14px;letter-spacing:.16em;color:var(--c)}
+.low-fx .seg[aria-checked="true"]{box-shadow:0 0 0 1px var(--c)}
+@media (max-width:480px){.card .btn-big{justify-self:stretch}}
+
+/* ---------- Screen 2: game tiles ---------- */
+.welcome{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 16px;padding:14px 18px}
+.welcome-text{font-family:var(--font-title);font-size:clamp(16px,2.6vw,22px);letter-spacing:.06em;margin:0}
+.welcome-text .a{text-shadow:0 0 14px rgba(255,122,89,.6)}
+.welcome-text .b{text-shadow:0 0 14px rgba(79,209,232,.6)}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px}
+.tile{
+  --tile:#f4c542;--glow:rgba(244,197,66,.45);
+  display:flex;flex-direction:column;gap:10px;padding:12px 12px 16px;min-width:0;border-radius:16px;
+  color:var(--ink);text-decoration:none;cursor:pointer;
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01)),var(--panel);
+  border:1px solid var(--edge);
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s,border-color .22s;
+}
+.tile[data-game="pong"]{--tile:#ff4fd8;--glow:rgba(255,79,216,.45)}
+.tile[data-game="racing"]{--tile:#5cff9d;--glow:rgba(92,255,157,.4)}
+.tile[data-game="boss"]{--tile:#ff4f6d;--glow:rgba(255,79,109,.45)}
+.tile:hover,.tile:focus-visible{
+  outline:none;transform:translateY(-6px);border-color:var(--tile);
+  box-shadow:0 0 0 1px var(--tile),0 14px 34px rgba(0,0,0,.55),0 0 30px var(--glow)
+}
+.preview-frame{display:block;border-radius:10px;overflow:hidden;background:#06050d;border:1px solid rgba(255,255,255,.06)}
+canvas.preview{display:block;width:100%;aspect-ratio:16/9}
+.tile-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 4px 0}
+.tile-title{font-family:var(--font-title);font-size:20px;letter-spacing:.05em;color:var(--tile);text-shadow:0 0 14px var(--glow)}
+.badge{font-weight:700;font-size:12px;letter-spacing:.14em;padding:4px 10px;border-radius:999px;border:1px solid var(--tile);color:var(--tile);flex:none}
+.tile-desc{color:var(--muted);padding:0 4px}
+.tile-keys{margin-top:auto;padding:0 4px;font-weight:700;font-size:13px;letter-spacing:.08em}
+.tile.locked{cursor:not-allowed;filter:grayscale(1);opacity:.6}
+.tile.shake{animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+.status{margin:0;min-height:1.4em;text-align:center;color:var(--ruler);font-weight:700}
+.hint{margin:0;text-align:center;color:var(--muted)}
+
+/* "Low effects": flat colors, no glows */
+.low-fx .logo{filter:none}
+.low-fx .field input,.low-fx .field input:focus{box-shadow:none}
+.low-fx .tile:hover,.low-fx .tile:focus-visible{box-shadow:0 0 0 1px var(--tile)}
+.low-fx .tile-title,.low-fx .welcome-text span{text-shadow:none}
+</style>
+</head>
+<body>
+<canvas id="bg" aria-hidden="true"></canvas>
+<div class="wrap">
+  <div class="topbar">
+    <button class="switch" id="low-fx" type="button" role="switch" aria-checked="false">Low effects</button>
+  </div>
+  <header class="top">
+    <h1 class="logo">PIXEL PARTY</h1>
+    <p class="tag">Tiny games for one or two players on one keyboard.</p>
+  </header>
+
+  <!-- ===== Screen 1: player names ===== -->
+  <section id="names-screen">
+    <form id="names-form" class="card" novalidate>
+      <h2 class="card-title">WHO IS PLAYING?</h2>
+      <div class="seg-row" id="mode" role="radiogroup" aria-label="How many players">
+        <button class="seg" type="button" role="radio" data-solo="1">1 PLAYER</button>
+        <button class="seg" type="button" role="radio" data-solo="0">2 PLAYERS</button>
+      </div>
+      <div class="fields">
+        <div class="field one">
+          <label for="name1">PLAYER 1 NAME</label>
+          <input id="name1" name="p1" type="text" maxlength="8" placeholder="P1"
+                 autocomplete="off" autocapitalize="characters" spellcheck="false"
+                 aria-describedby="err1 rules">
+          <p class="error" id="err1" aria-live="polite"></p>
+        </div>
+        <div class="field two">
+          <label for="name2">PLAYER 2 NAME</label>
+          <input id="name2" name="p2" type="text" maxlength="8" placeholder="P2"
+                 autocomplete="off" autocapitalize="characters" spellcheck="false"
+                 aria-describedby="err2 rules">
+          <p class="error" id="err2" aria-live="polite"></p>
+        </div>
+        <div class="field two" id="cpu-field" hidden>
+          <span class="label" id="level-label">CPU LEVEL</span>
+          <div class="seg-row levels" id="levels" role="radiogroup" aria-labelledby="level-label">
+            <button class="seg" type="button" role="radio" data-level="easy">EASY</button>
+            <button class="seg" type="button" role="radio" data-level="normal">NORMAL</button>
+            <button class="seg" type="button" role="radio" data-level="hard">HARD</button>
+          </div>
+        </div>
+      </div>
+      <p class="rules" id="rules">Up to 8 letters or numbers. Leave a box empty to play as P1 / P2.</p>
+      <button class="btn btn-big" type="submit" id="start">START</button>
+    </form>
+  </section>
+
+  <!-- ===== Screen 2: game tiles ===== -->
+  <section id="games-screen" hidden>
+    <div class="wrap">
+      <div class="welcome">
+        <p class="welcome-text">WELCOME, <span class="a" id="welcome1">P1</span> VS <span class="b" id="welcome2">P2</span></p>
+        <button class="btn" type="button" id="change-names">CHANGE PLAYERS</button>
+      </div>
+
+      <div class="tiles" id="tiles" role="group" aria-label="Games">
+        <a class="tile" data-game="reflex" data-solo="yes" href="games/reflex-duel.html" data-href="games/reflex-duel.html" data-title="REFLEX DUEL">
+          <span class="preview-frame"><canvas class="preview" data-preview="reflex" aria-hidden="true"></canvas></span>
+          <span class="tile-head"><span class="tile-title">REFLEX DUEL</span><span class="badge">PLAY</span></span>
+          <span class="tile-desc">Catch the falling ruler before your rival does.</span>
+          <span class="tile-keys"><span class="a">P1: F</span> &middot; <span class="b">P2: K / NUM 0</span></span>
+        </a>
+
+        <a class="tile" data-game="pong" data-solo="yes" href="games/pixel-pong.html" data-href="games/pixel-pong.html" data-title="PIXEL PONG">
+          <span class="preview-frame"><canvas class="preview" data-preview="pong" aria-hidden="true"></canvas></span>
+          <span class="tile-head"><span class="tile-title">PIXEL PONG</span><span class="badge">PLAY</span></span>
+          <span class="tile-desc">Bounce the ball past your rival's paddle.</span>
+          <span class="tile-keys"><span class="a">P1: W / S</span> &middot; <span class="b">P2: UP / DOWN</span></span>
+        </a>
+
+        <a class="tile" data-game="racing" data-solo="yes" href="games/mini-racing.html" data-href="games/mini-racing.html" data-title="MINI RACING">
+          <span class="preview-frame"><canvas class="preview" data-preview="racing" aria-hidden="true"></canvas></span>
+          <span class="tile-head"><span class="tile-title">MINI RACING</span><span class="badge">PLAY</span></span>
+          <span class="tile-desc">Race up the road, dodge traffic and fire power-ups.</span>
+          <span class="tile-keys"><span class="a">P1: W A S D + F</span> &middot; <span class="b">P2: ARROWS + K</span></span>
+        </a>
+
+        <a class="tile" data-game="boss" data-solo="yes" href="games/boss-fight.html" data-href="games/boss-fight.html" data-title="BOSS FIGHT">
+          <span class="preview-frame"><canvas class="preview" data-preview="boss" aria-hidden="true"></canvas></span>
+          <span class="tile-head"><span class="tile-title">BOSS FIGHT (CO-OP)</span><span class="badge">PLAY</span></span>
+          <span class="tile-desc">Each player breaks one leg, then smash the core together.</span>
+          <span class="tile-keys"><span class="a">P1: A D + F G S</span> &middot; <span class="b">P2: ARROWS + K L</span></span>
+        </a>
+      </div>
+
+      <p class="status" id="status" aria-live="polite"></p>
+      <p class="hint">Arrow keys to choose a game, <kbd>ENTER</kbd> to play.</p>
+    </div>
+  </section>
+</div>
+
+<script src="js/players.js"></script>
+<script src="js/fx.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const namesScreen = $('names-screen'), gamesScreen = $('games-screen');
+  const form = $('names-form'), startBtn = $('start');
+  const inputs = [$('name1'), $('name2')];
+  const errors = [$('err1'), $('err2')];
+  const tiles = [...document.querySelectorAll('.tile')];
+  const status = $('status');
+
+  let names = Players.DEFAULTS.slice();   // the two names currently in use
+  let current = 0;                        // which tile the keyboard is on
+  let setup = Players.loadSetup();        // { solo: 1 player vs CPU?, level: 'easy' | 'normal' | 'hard' }
+  const modeBtns = [...document.querySelectorAll('#mode .seg')];
+  const levelBtns = [...document.querySelectorAll('#levels .seg')];
+  const LEVEL_NAME = { easy: 'EASY', normal: 'NORMAL', hard: 'HARD' };
+
+  // ================= Screen 1: player names =================
+
+  // What's wrong with one typed name? Returns '' when it's fine.
+  function problem(value) {
+    if (!/^[A-Z0-9]*$/.test(value)) return 'LETTERS AND NUMBERS ONLY';
+    if (value.length > Players.MAX_LEN) return 'MAX 8 CHARACTERS';
+    return '';
+  }
+  // An empty box means "use P1" / "use P2"
+  function finalName(i) {
+    if (i === 1 && setup.solo) return Players.CPU_NAME;   // 1 player: player 2 is the computer
+    return inputs[i].value.trim() || Players.DEFAULTS[i];
+  }
+  // Checks both boxes, shows the messages, and turns the Start button on or off
+  function validate() {
+    const msgs = inputs.map(inp => problem(inp.value.trim()));
+    if (setup.solo) msgs[1] = '';           // (the player 2 box is hidden)
+    if (!msgs[0] && !msgs[1] && finalName(0) === finalName(1)) msgs[setup.solo ? 0 : 1] = 'PICK A DIFFERENT NAME';
+    msgs.forEach((msg, i) => {
+      errors[i].textContent = msg;
+      inputs[i].setAttribute('aria-invalid', msg ? 'true' : 'false');
+    });
+    const ok = !msgs[0] && !msgs[1];
+    startBtn.disabled = !ok;
+    return ok;
+  }
+
+  // Turn what the player types into uppercase straight away (keeping the cursor in place)
+  inputs.forEach(inp => inp.addEventListener('input', () => {
+    const upper = inp.value.toUpperCase();
+    if (upper !== inp.value) {
+      const a = inp.selectionStart, b = inp.selectionEnd;
+      inp.value = upper;
+      inp.setSelectionRange(a, b);
+    }
+    validate();
+  }));
+
+  // Start button (or Enter in a box)
+  form.addEventListener('submit', e => {
+    e.preventDefault();                   // stop the browser reloading the page
+    if (!validate()) return;
+    names = [finalName(0), finalName(1)];
+    // remember for next time (1 player mode keeps the last real player 2 name for later)
+    const saved = Players.load();
+    Players.save(setup.solo ? [names[0], saved ? saved[1] : Players.DEFAULTS[1]] : names);
+    Players.saveSetup(setup);
+    showGames();
+  });
+
+  // ----- 1 PLAYER / 2 PLAYERS and the CPU level -----
+  function showSetup() {
+    modeBtns.forEach(b => {
+      const on = (b.dataset.solo === '1') === setup.solo;
+      b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1;
+    });
+    levelBtns.forEach(b => {
+      const on = b.dataset.level === setup.level;
+      b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1;
+    });
+    inputs[1].closest('.field').hidden = setup.solo;   // 1 player: no name box for player 2...
+    $('cpu-field').hidden = !setup.solo;               // ...pick how good the CPU is instead
+    $('rules').textContent = setup.solo
+      ? 'Up to 8 letters or numbers. Leave the box empty to play as P1. You play against the computer (CPU).'
+      : 'Up to 8 letters or numbers. Leave a box empty to play as P1 / P2.';
+    validate();
+  }
+  modeBtns.forEach(b => b.addEventListener('click', () => { setup.solo = b.dataset.solo === '1'; showSetup(); }));
+  levelBtns.forEach(b => b.addEventListener('click', () => { setup.level = b.dataset.level; showSetup(); }));
+  // radio groups: the arrow keys move the choice
+  [modeBtns, levelBtns].forEach(group => group.forEach((b, i) => b.addEventListener('keydown', e => {
+    const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const next = group[(i + d + group.length) % group.length];
+    next.click(); next.focus();
+  })));
+
+  function showNames() {
+    gamesScreen.hidden = true;
+    namesScreen.hidden = false;
+    // Fill the boxes with the current names (leave them empty if they are just P1 / P2)
+    const saved = Players.load();         // (coming from 1 player mode: bring back the last real player 2 name)
+    inputs.forEach((inp, i) => {
+      const n = i === 1 && names[1] === Players.CPU_NAME ? (saved ? saved[1] : Players.DEFAULTS[1]) : names[i];
+      inp.value = n === Players.DEFAULTS[i] ? '' : n;
+    });
+    showSetup();
+    inputs[0].focus();
+    inputs[0].select();
+  }
+
+  // ================= Screen 2: game tiles =================
+
+  function showGames() {
+    namesScreen.hidden = true;
+    gamesScreen.hidden = false;
+    status.textContent = '';
+    $('welcome1').textContent = names[0];
+    $('welcome2').textContent = setup.solo ? 'CPU (' + LEVEL_NAME[setup.level] + ')' : names[1];
+    // Put the names in each game's link: games/reflex-duel.html?p1=VIRAJ&p2=KASUN (1 player: ?p1=VIRAJ&cpu=normal)
+    const query = Players.toQuery(names, setup.solo ? setup.level : null);
+    // keep the page address up to date, so a refresh doesn't bring back old players
+    try { if (location.search && location.search !== query) history.replaceState(null, '', location.pathname + query); } catch (e) { /* some browsers block this on file:// */ }
+    tiles.forEach(t => {
+      if (t.dataset.href) t.href = t.dataset.href + query;
+      // 1 player mode only works in games that already have a CPU player
+      const locked = setup.solo && t.dataset.solo !== 'yes';
+      t.setAttribute('aria-disabled', String(locked));
+      t.classList.toggle('locked', locked);
+      t.querySelector('.badge').textContent = locked ? '1P SOON' : 'PLAY';
+      const keys = t.querySelector('.tile-keys .b');
+      if (!keys.dataset.two) keys.dataset.two = keys.textContent;
+      keys.textContent = setup.solo ? 'P2: CPU' : keys.dataset.two;
+    });
+    tiles[current].focus();
+    previews.forEach(pv => { pv.dirty = true; });
+  }
+
+  $('change-names').addEventListener('click', showNames);
+
+  // Only one tile is reachable with Tab at a time; arrow keys move between tiles.
+  function setCurrent(i) {
+    current = i;
+    tiles.forEach((t, j) => { t.tabIndex = (j === i) ? 0 : -1; });
+  }
+  tiles.forEach((t, i) => t.addEventListener('focus', () => setCurrent(i)));
+  setCurrent(0);
+
+  // How many tiles fit in one row right now? (2 on a laptop, 1 on a phone)
+  function columns() {
+    const firstRowTop = tiles[0].offsetTop;
+    return tiles.filter(t => t.offsetTop === firstRowTop).length;
+  }
+
+  function isLocked(tile) { return tile.getAttribute('aria-disabled') === 'true'; }
+
+  function comingSoon(tile) {
+    status.textContent = setup.solo ? tile.dataset.title + ' FOR 1 PLAYER IS COMING SOON! PICK 2 PLAYERS TO PLAY IT NOW.'
+                                    : tile.dataset.title + ' IS COMING SOON!';
+    tile.classList.remove('shake');
+    void tile.offsetWidth;                // restart the shake animation
+    tile.classList.add('shake');
+  }
+
+  tiles.forEach(t => t.addEventListener('click', e => {
+    if (isLocked(t)) { e.preventDefault(); comingSoon(t); }
+  }));
+
+  $('tiles').addEventListener('keydown', e => {
+    const i = tiles.indexOf(e.target);
+    if (i < 0) return;
+    const cols = columns();
+    const moves = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols };
+    if (e.key in moves) {
+      e.preventDefault();                 // stop the page scrolling
+      const j = i + moves[e.key];
+      if (j >= 0 && j < tiles.length) tiles[j].focus();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      tiles[i].click();                   // playable: opens the game. locked: "coming soon"
+    }
+  });
+
+  // If the keyboard isn't on a tile yet (e.g. after clicking empty space), an arrow key jumps to one
+  document.addEventListener('keydown', e => {
+    if (gamesScreen.hidden || !e.key.startsWith('Arrow')) return;
+    if (tiles.includes(document.activeElement)) return;
+    e.preventDefault();
+    tiles[current].focus();
+  });
+
+  // ================= Low effects switch (remembered by js/fx.js) =================
+  const lowBtn = $('low-fx');
+  function showLow(on) {
+    lowBtn.setAttribute('aria-checked', String(on));
+    document.documentElement.classList.toggle('low-fx', on);
+    bgDirty = true;
+    previews.forEach(pv => { pv.dirty = true; });
+  }
+  lowBtn.addEventListener('click', () => FX.setLow(!FX.low));
+  FX.onLowChange(showLow);
+
+  // =====================================================================
+  // GRAPHICS
+  // =====================================================================
+  const P1 = '#ff7a59', P2 = '#4fd1e8', GOLD = '#f4c542', PINK = '#ff4fd8', LIME = '#5cff9d';
+  const RED = '#ff4f6d', NEON = '#b45cff', INK = '#f1ecff';
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;   // then: still pictures
+  const add = ctx => { ctx.globalCompositeOperation = 'lighter'; };
+  const normal = ctx => { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; };
+  function glow(ctx, color, x, y, r, alpha = 1) {   // a soft neon light (skipped in Low effects)
+    if (FX.low) return;
+    ctx.globalAlpha = alpha; add(ctx);
+    ctx.drawImage(FX.glowDot(color), x - r, y - r, r * 2, r * 2);
+    normal(ctx);
+  }
+
+  // ---------- animated page background: neon grid + slow light streaks ----------
+  const bg = $('bg'), bctx = bg.getContext('2d');
+  let bgW = 0, bgH = 0, bgDirty = true;
+  function sizeBg() {
+    bgW = innerWidth; bgH = innerHeight;
+    bg.width = bgW; bg.height = bgH;               // 1x is plenty for a soft background
+    bgDirty = true;
+  }
+  addEventListener('resize', sizeBg);
+  sizeBg();
+  const streaks = Array.from({ length: 5 }, (_, i) => ({
+    y: 0.08 + i * 0.11, speed: FX.rand(0.015, 0.035), len: FX.rand(0.18, 0.35), phase: Math.random(), color: [P1, P2, NEON, PINK, GOLD][i]
+  }));
+  function drawBg(t) {
+    const c = bctx, w = bgW, h = bgH, hz = h * 0.64;
+    const g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#07060f'); g.addColorStop(0.62, '#140d2c'); g.addColorStop(1, '#06050c');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    // grid floor rushing towards you
+    c.lineWidth = 1;
+    for (let i = 0; i < 18; i++) {
+      const k = (i + (t * 0.25) % 1) / 18, y = hz + (h - hz) * k * k;
+      c.strokeStyle = FX.rgba(NEON, 0.06 + k * 0.3);
+      c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke();
+    }
+    c.strokeStyle = FX.rgba(NEON, 0.16);
+    for (let i = -18; i <= 18; i++) {
+      c.beginPath(); c.moveTo(w / 2 + i * w * 0.01, hz); c.lineTo(w / 2 + i * w * 0.08, h); c.stroke();
+    }
+    if (!FX.low) {
+      c.globalCompositeOperation = 'lighter';
+      c.globalAlpha = 0.55;                      // horizon glow
+      c.drawImage(FX.glowDot(NEON), w * -0.1, hz - h * 0.14, w * 1.2, h * 0.28);
+      c.globalAlpha = 1;
+      // slow light streaks across the sky
+      for (const s of streaks) {
+        const x = ((t * s.speed + s.phase) % 1.5 - 0.25) * w, y = s.y * hz, len = s.len * w;
+        const lg = c.createLinearGradient(x - len, 0, x, 0);
+        lg.addColorStop(0, FX.rgba(s.color, 0)); lg.addColorStop(1, FX.rgba(s.color, 0.55));
+        c.strokeStyle = lg; c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(x - len, y); c.lineTo(x, y); c.stroke();
+        c.drawImage(FX.glowDot(s.color), x - 14, y - 14, 28, 28);
+      }
+      c.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  // ---------- pre-drawn glowing shapes for the previews (made once, reused) ----------
+  const SHAPES = {
+    ruler: () => FX.shape('m-ruler', 9, 46, g => {
+      FX.roundRect(g, 0, 0, 9, 46, 2); g.fillStyle = GOLD; g.fill();
+      g.fillStyle = '#3b2a10';
+      for (let i = 1; i < 23; i++) g.fillRect(0, i * 2, i % 5 === 0 ? 5 : 2.5, 0.45);
+    }, { color: GOLD, glow: 4 }),
+    hand: c => FX.shape('m-hand' + c, 7, 11, g => { FX.roundRect(g, 0, 0, 7, 11, 3.5); g.fillStyle = c; g.fill(); }, { color: c, glow: 4 }),
+    paddle: c => FX.shape('m-pad' + c, 3, 16, g => { FX.roundRect(g, 0, 0, 3, 16, 1.5); g.fillStyle = c; g.fill(); }, { color: c, glow: 5 }),
+    ball: () => FX.shape('m-ball', 4, 4, g => { g.fillStyle = INK; g.beginPath(); g.arc(2, 2, 2, 0, Math.PI * 2); g.fill(); }, { color: PINK, glow: 5 }),
+    car: c => FX.shape('m-car' + c, 18, 11, g => {
+      FX.roundRect(g, 0, 3, 18, 8, 3); g.fillStyle = c; g.fill();
+      FX.roundRect(g, 3.5, 0, 11, 6, 2.5); g.fillStyle = FX.mix(c, '#000000', 0.45); g.fill();
+      g.fillStyle = '#ff4f6d'; g.fillRect(1, 8, 3, 1.4); g.fillRect(14, 8, 3, 1.4);
+    }, { color: c, glow: 4 }),
+    knight: c => FX.shape('m-knight' + c, 6, 10, g => {
+      FX.roundRect(g, 1, 0, 4, 4, 2); g.fillStyle = INK; g.fill();
+      FX.roundRect(g, 0, 4, 6, 6, 2); g.fillStyle = c; g.fill();
+    }, { color: c, glow: 3 }),
+    boss: flash => FX.shape('m-boss' + flash, 52, 56, g => {
+      const fill = flash ? INK : '#2e2858';
+      g.fillStyle = fill; g.strokeStyle = flash ? INK : RED; g.lineWidth = 1;
+      const part = (x, y, w, h, r) => { FX.roundRect(g, x, y, w, h, r); g.fill(); g.stroke(); };
+      part(10, 40, 11, 16, 3); part(31, 40, 11, 16, 3);          // legs
+      part(0, 18, 6, 20, 3); part(46, 18, 6, 20, 3);             // arms
+      part(4, 16, 44, 26, 6);                                    // body
+      part(16, 4, 20, 13, 3);                                    // head
+      g.fillStyle = GOLD;                                        // crown
+      for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(18 + i * 6, 4); g.lineTo(21 + i * 6, -1); g.lineTo(24 + i * 6, 4); g.fill(); }
+    }, { color: flash ? INK : RED, glow: 4 })
+  };
+
+  // ---------- small animated previews, one per tile ----------
+  const previews = tiles.map(tile => {
+    const cv = tile.querySelector('canvas.preview');
+    if (!cv) return null;
+    const pv = { tile, kind: cv.dataset.preview, st: FX.stage(cv, { width: 160, height: 90 }), parts: new FX.Particles(160), pops: [], shake: 0, t: reduced ? 1.35 : 0, dirty: true, s: null };
+    pv.st.onResize = () => { pv.dirty = true; };
+    return pv;
+  }).filter(Boolean);
+
+  function pop(pv, str, x, y, color, size = 9) { pv.pops.push({ str, x, y, color, size, age: 0 }); }
+  function drawPops(pv, ctx, dt) {
+    pv.pops = pv.pops.filter(p => (p.age += dt) < 0.9);
+    for (const p of pv.pops) {
+      const k = p.age / 0.9, scale = k < 0.22 ? Math.max(0.01, FX.ease.outBack(k / 0.22)) : 1;
+      FX.drawText(ctx, p.str, p.x, p.y - 10 * FX.ease.outCubic(k), { size: p.size, color: p.color, scale, alpha: k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4 });
+    }
+  }
+  // returns { k: time in this loop, first: true once at the start of each loop }
+  function loopTime(pv, t, length) {
+    const k = t % length, again = pv.lastK != null && k < pv.lastK;
+    pv.lastK = k;
+    if (again || !pv.ev) pv.ev = {};
+    return k;
+  }
+
+  const SCENES = {
+    // two rulers drop, the hands snap shut, reaction times pop up
+    reflex(pv, ctx, t) {
+      const k = loopTime(pv, t, 3.2), ev = pv.ev;
+      const DROP = 0.9, CATCH = [0.24, 0.31], X = [56, 104], TOP = 10, G = 300, HAND_Y = 66;
+      ctx.strokeStyle = FX.rgba(GOLD, 0.07); ctx.lineWidth = 0.5;
+      for (let y = 12; y < 90; y += 8) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(160, y); ctx.stroke(); }
+      ctx.strokeStyle = FX.rgba(INK, 0.15); ctx.setLineDash([2, 2]);
+      ctx.beginPath(); ctx.moveTo(80, 4); ctx.lineTo(80, 86); ctx.stroke(); ctx.setLineDash([]);
+      for (const p of [0, 1]) {
+        const color = p ? P2 : P1, since = k - DROP, caught = since >= CATCH[p];
+        const tt = FX.clamp(since, 0, CATCH[p]), y = TOP + 4 + G * tt * tt;
+        ctx.fillStyle = FX.rgba(INK, 0.4); ctx.fillRect(X[p] - 9, TOP, 18, 1.5);
+        if (since > 0 && !caught) {              // motion blur while it falls
+          const v = 2 * G * tt;
+          for (let i = 3; i >= 1; i--) FX.drawShape(ctx, SHAPES.ruler(), X[p], y - i * v * 0.012, { ax: 0.5, ay: 0, alpha: 0.1 * (4 - i) });
+        }
+        FX.drawShape(ctx, SHAPES.ruler(), X[p], y, { ax: 0.5, ay: 0 });
+        const gap = caught ? 0 : 3.5;            // fingers snap shut on the catch
+        FX.drawShape(ctx, SHAPES.hand(color), X[p] - 8.5 - gap, HAND_Y);
+        FX.drawShape(ctx, SHAPES.hand(color), X[p] + 8.5 + gap, HAND_Y);
+        if (caught && !ev['c' + p]) {
+          ev['c' + p] = true;
+          pv.parts.sparks(X[p], HAND_Y, { color, count: 16, speed: 70, gravity: 60 });
+          pv.shake = Math.min(1, pv.shake + 0.35);
+          pop(pv, Math.round(CATCH[p] * 1000) + ' MS', X[p], 82, color);
+        }
+      }
+      if (k > 1.5 && k < 2.9) FX.drawText(ctx, names[0] + ' POINT', 80, 6, { size: 7, color: P1, alpha: Math.min(1, (k - 1.5) * 4) });
+      if (k > 2.9) { ctx.fillStyle = FX.rgba('#06050d', (k - 2.9) / 0.3); ctx.fillRect(-5, -5, 170, 100); }
+    },
+
+    // glowing ball with a trail, paddles squash on hits, sparks on a power hit
+    pong(pv, ctx, t, dt) {
+      const s = pv.s || (pv.s = { x: 80, y: 45, vx: 75, vy: 38, yl: 45, yr: 45, sqL: 0, sqR: 0, trail: [], hits: 0 });
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      if (s.y < 5) { s.y = 5; s.vy = Math.abs(s.vy); }
+      if (s.y > 85) { s.y = 85; s.vy = -Math.abs(s.vy); }
+      s.yl += (s.y - s.yl) * Math.min(1, dt * 6); s.yr += (s.y - s.yr) * Math.min(1, dt * 6);
+      const hit = (color, x, dir) => {
+        s.hits++;
+        const power = s.hits % 4 === 0;
+        pv.parts.sparks(x, s.y, { color: power ? GOLD : color, count: power ? 24 : 10, speed: power ? 120 : 70, angle: dir > 0 ? 0 : Math.PI, spread: 1.6, gravity: 40 });
+        if (power) { pv.shake = Math.min(1, pv.shake + 0.45); pop(pv, 'POWER!', 80, 22, GOLD); }
+        if (Math.abs(s.vx) > 140) s.vx = Math.sign(s.vx) * 75;
+        s.vy = FX.clamp(s.vy + FX.rand(-25, 25), -70, 70);
+      };
+      if (s.x < 12 && s.vx < 0) { s.x = 12; s.vx = -s.vx * 1.07; s.sqL = 1; hit(P1, 11, 1); }
+      if (s.x > 148 && s.vx > 0) { s.x = 148; s.vx = -s.vx * 1.07; s.sqR = 1; hit(P2, 149, -1); }
+      s.sqL = Math.max(0, s.sqL - dt * 5); s.sqR = Math.max(0, s.sqR - dt * 5);
+      s.trail.push([s.x, s.y]); if (s.trail.length > 14) s.trail.shift();
+      ctx.fillStyle = FX.rgba(PINK, 0.25);
+      for (let y = 4; y < 86; y += 8) ctx.fillRect(79.5, y, 1, 4);
+      ctx.fillRect(0, 1, 160, 0.6); ctx.fillRect(0, 88.4, 160, 0.6);
+      s.trail.forEach(([x, y], i) => {          // the trail behind the ball
+        const a = i / s.trail.length;
+        if (FX.low) { ctx.globalAlpha = a * 0.5; ctx.fillStyle = PINK; ctx.fillRect(x - 1, y - 1, 2, 2); normal(ctx); }
+        else glow(ctx, PINK, x, y, 1 + a * 5, a * 0.7);
+      });
+      const paddle = (x, y, color, sq) => {
+        ctx.save(); ctx.translate(x, y); ctx.scale(1 + sq * 0.8, 1 - sq * 0.25);
+        FX.drawShape(ctx, SHAPES.paddle(color), 0, 0); ctx.restore();
+      };
+      paddle(8, s.yl, P1, s.sqL); paddle(152, s.yr, P2, s.sqR);
+      FX.drawShape(ctx, SHAPES.ball(), s.x, s.y);
+    },
+
+    // synthwave road: curving, roadside lights, speed lines, nitro and tire smoke
+    racing(pv, ctx, t, dt) {
+      const HZ = 34, H = 90, curve = Math.sin(t * 0.7);
+      const sky = ctx.createLinearGradient(0, 0, 0, HZ);
+      sky.addColorStop(0, '#0a0820'); sky.addColorStop(1, '#32103f');
+      ctx.fillStyle = sky; ctx.fillRect(-5, -5, 170, HZ + 5);
+      glow(ctx, PINK, 80, HZ, 40, 0.7);
+      const sun = ctx.createLinearGradient(0, HZ - 14, 0, HZ);
+      sun.addColorStop(0, GOLD); sun.addColorStop(1, PINK);
+      ctx.fillStyle = sun; ctx.beginPath(); ctx.arc(80, HZ, 14, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#32103f';
+      for (let i = 0; i < 4; i++) ctx.fillRect(64, HZ - 2 - i * 3.2, 32, 0.8 + i * 0.15);
+      const roadX = p => 80 + curve * 34 * (1 - p) ** 2;
+      const left = [], right = [];
+      for (let y = HZ; y < H; y++) {             // the road, one row at a time
+        const p = (y - HZ + 0.5) / (H - HZ), z = 1 / (p + 0.04);
+        const half = 3 + 72 * p, cx = roadX(p), band = Math.floor(z * 0.9 + t * 12) % 2;
+        ctx.fillStyle = band ? '#0b0a1a' : '#0e0c20'; ctx.fillRect(-5, y, 170, 1);
+        ctx.fillStyle = band ? '#1a1636' : '#201b42'; ctx.fillRect(cx - half, y, half * 2, 1);
+        if (band) { const dw = Math.max(0.4, p * 1.6); ctx.fillStyle = FX.rgba(GOLD, 0.5 + p * 0.4); ctx.fillRect(cx - dw / 2, y, dw, 1); }
+        left.push([cx - half, y + 0.5]); right.push([cx + half, y + 0.5]);
+      }
+      for (const edge of [left, right]) {         // smooth glowing edge lines on top
+        for (const [w, a] of FX.low ? [[0.8, 0.9]] : [[2.4, 0.18], [0.8, 0.95]]) {
+          ctx.strokeStyle = FX.rgba(LIME, a); ctx.lineWidth = w;
+          ctx.beginPath(); edge.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+        }
+      }
+      for (let i = 0; i < 8; i++) {              // roadside lights rushing past
+        const zz = ((i * 3.5 - t * 9) % 28 + 28) % 28 + 1, p = 1 / zz - 0.04;
+        if (p <= 0 || p > 1) continue;
+        const y = HZ + p * (H - HZ), half = 3 + 72 * p, cx = roadX(p);
+        for (const side of [-1, 1]) {
+          const x = cx + side * (half + 3 + p * 8), top = y - 2 - p * 10;
+          ctx.fillStyle = FX.rgba(INK, 0.3); ctx.fillRect(x - 0.3, top, 0.6, y - top);
+          if (FX.low) { ctx.fillStyle = i % 2 ? PINK : P2; ctx.fillRect(x - 1, top - 1, 2, 2); }
+          else glow(ctx, i % 2 ? PINK : P2, x, top, 1.5 + p * 7);
+        }
+      }
+      ctx.lineWidth = 0.5;                       // speed lines
+      for (let i = 0; i < 8; i++) {
+        const a = (t * 1.4 + i / 8) % 1, side = i % 2 ? 1 : -1;
+        const x = 80 + side * (16 + a * 70), y = HZ + 6 + a * 44 + (i % 3) * 4;
+        ctx.strokeStyle = FX.rgba(INK, a * 0.35);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + side * a * 14, y + a * 9); ctx.stroke();
+      }
+      const nitro = t % 4 > 2.6, ev = pv.ev || (pv.ev = {});
+      if (nitro && !ev.n) { ev.n = true; pop(pv, 'NITRO!', 98, 52, P2); }
+      if (!nitro) ev.n = false;
+      const c1 = 62 + Math.sin(t * 1.3) * 7, c2 = 98 + Math.sin(t * 1.1 + 1) * 7, cy = 77;
+      if (Math.abs(Math.cos(t * 1.3)) > 0.85 && Math.random() < dt * 14) pv.parts.smoke(c1 + FX.rand(-6, 6), cy + 5, { count: 1, size: 2, grow: 7, color: '#6d6890', vy: 14 });
+      if (nitro) for (const ex of [-4, 4]) pv.parts.dot(c2 + ex, cy + 6, { color: Math.random() < 0.5 ? '#4f8bff' : P2, size: 3, life: 0.22, vy: 40 });
+      FX.drawShape(ctx, SHAPES.car(P1), c1, cy);
+      FX.drawShape(ctx, SHAPES.car(P2), c2, cy - (nitro ? 2 : 0));
+      for (const [x, y] of [[c1 - 7, cy + 3], [c1 + 7, cy + 3], [c2 - 7, cy + 3 - (nitro ? 2 : 0)], [c2 + 7, cy + 3 - (nitro ? 2 : 0)]]) glow(ctx, RED, x, y, 3, 0.8);
+    },
+
+    // boss pulses, knights strike its legs (white flash + damage numbers), red warning, stomp
+    boss(pv, ctx, t) {
+      const k = loopTime(pv, t, 2.6), ev = pv.ev, FLOOR = 78;
+      ctx.fillStyle = FX.rgba(RED, 0.5); ctx.fillRect(0, FLOOR, 160, 0.8);
+      glow(ctx, RED, 80, FLOOR, 60, 0.18);
+      const warn = k > 1.6 && k < 2.0;
+      if (warn) { ctx.fillStyle = FX.rgba(RED, 0.18 + 0.14 * Math.sin(k * 40)); ctx.fillRect(28, FLOOR - 9, 104, 9); }
+      if (k >= 2.0 && !ev.stomp) {
+        ev.stomp = true;
+        pv.shake = Math.min(1, pv.shake + 0.6);
+        pv.parts.explosion(80, FLOOR, { color: RED, size: 0.45 });
+      }
+      const strike = (who, from, to, start, hitAt, x) => {     // a knight lunges and hits a leg
+        const lunge = k > start && k < start + 0.3 ? Math.sin((k - start) / 0.3 * Math.PI) : 0;
+        const kx = FX.lerp(from, to, lunge), color = who ? P2 : P1;
+        FX.drawShape(ctx, SHAPES.knight(color), kx, FLOOR, { ay: 1 });
+        if (lunge > 0.3) { ctx.strokeStyle = INK; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(kx + (who ? -3 : 3), FLOOR - 6); ctx.lineTo(kx + (who ? -11 : 11), FLOOR - 9); ctx.stroke(); }
+        if (k >= hitAt && !ev['h' + who]) {
+          ev['h' + who] = true; ev.flashAt = t;
+          pv.parts.sparks(x, FLOOR - 8, { color, count: 12, speed: 70, gravity: 50 });
+          pop(pv, String(FX.pick([4, 8, 12])), x, FLOOR - 18, color);
+        }
+      };
+      const lift = warn ? (k - 1.6) / 0.4 * 4 : 0;
+      const flash = ev.flashAt != null && t - ev.flashAt < 0.09;
+      const top = 22 + Math.sin(t * 2) - lift;
+      FX.drawShape(ctx, SHAPES.boss(flash), 80, top, { ax: 0.5, ay: 0 });
+      const pulse = 1 + Math.sin(t * 5) * 0.2;   // glowing core and red eyes
+      ctx.fillStyle = GOLD; ctx.beginPath(); ctx.moveTo(80, top + 25); ctx.lineTo(83, top + 29); ctx.lineTo(80, top + 33); ctx.lineTo(77, top + 29); ctx.fill();
+      glow(ctx, GOLD, 80, top + 29, 9 * pulse, 0.9);
+      for (const ex of [75, 85]) { ctx.fillStyle = RED; ctx.fillRect(ex - 1.5, top + 9, 3, 1.6); glow(ctx, RED, ex, top + 10, 4, 0.9); }
+      strike(0, 40, 58, 0.45, 0.6, 67);
+      strike(1, 120, 102, 1.15, 1.3, 93);
+    }
+  };
+
+  function drawPreview(pv, dt) {
+    const ctx = pv.st.ctx;
+    pv.st.begin();
+    pv.shake = Math.max(0, pv.shake - dt * 2);
+    if (pv.shake) ctx.translate((Math.random() - 0.5) * pv.shake * 6, (Math.random() - 0.5) * pv.shake * 4);
+    ctx.fillStyle = '#06050d'; ctx.fillRect(-5, -5, 170, 100);
+    SCENES[pv.kind](pv, ctx, pv.t, dt);
+    normal(ctx);
+    pv.parts.update(dt); pv.parts.draw(ctx);
+    drawPops(pv, ctx, dt);
+    pv.st.end();
+  }
+
+  // ---------- one animation loop for the background and the previews ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    FX.update(dt);
+    if (!document.hidden) {
+      if (!reduced || bgDirty) { drawBg(FX.time); bgDirty = false; }
+      if (!gamesScreen.hidden) {
+        for (const pv of previews) {
+          if (reduced && !pv.dirty) continue;    // reduced motion: draw still pictures only when needed
+          const step = reduced ? 0 : dt;
+          pv.t += step;
+          drawPreview(pv, step);
+          pv.dirty = false;
+        }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  showLow(FX.low);
+  requestAnimationFrame(frame);
+
+  // ================= Which screen to show first =================
+  // Coming back from a game: index.html?p1=VIRAJ&p2=KASUN -> straight to the tiles.
+  // Otherwise: the names screen, filled in with the names from last time (if any).
+  const fromURL = Players.fromURL();
+  if (fromURL) {
+    names = fromURL;
+    const cpu = Players.cpuFromURL();     // came back from a 1 player game?
+    setup = cpu ? { solo: true, level: cpu } : { solo: false, level: setup.level };
+    Players.saveSetup(setup);
+    if (!cpu) Players.save(names);
+    showGames();
+  } else {
+    names = Players.load() || names;
+    showNames();
+  }
+})();
+</script>
+</body>
+</html>

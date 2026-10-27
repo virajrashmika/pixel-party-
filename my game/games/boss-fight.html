@@ -1,0 +1,1524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Boss Fight - Pixel Party</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+/* Same layout as the other games: one big neon screen on top, two player panels below.
+   Shared colors, fonts, buttons and kbd come from css/style.css; only game-specific styles are here. */
+.wrap{max-width:1600px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+.screen{display:grid;place-items:center}
+canvas{
+  display:block;cursor:pointer;border-radius:14px;background:#07060f;
+  box-shadow:0 0 0 1px var(--edge),0 18px 50px rgba(0,0,0,.55),0 0 40px rgba(255,79,109,.12)
+}
+.low-fx canvas{box-shadow:0 0 0 1px var(--edge)}
+.players{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:1040px;width:100%;margin:0 auto}
+.player{
+  --c:var(--p1);--glow:rgba(255,122,89,.35);
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01)),var(--panel);
+  border:1px solid var(--edge);border-radius:16px;padding:16px 18px;display:grid;gap:12px;min-width:0
+}
+.player.two{--c:var(--p2);--glow:rgba(79,209,232,.35)}
+.player h2{font-family:var(--font-title);font-weight:400;font-size:18px;letter-spacing:.06em;margin:0;color:var(--c)}
+.player h2 span{color:var(--muted);font-family:var(--font-ui);font-weight:700;font-size:14px;letter-spacing:.12em}
+.player h2 .pname{color:inherit;font-family:var(--font-title);font-weight:400;font-size:18px;letter-spacing:.06em;text-shadow:0 0 12px var(--glow)}
+.keys{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px 12px;color:var(--muted)}
+.keys span{display:flex;flex-wrap:wrap;gap:6px}
+kbd.arrow{font-family:var(--font-body);font-size:22px;line-height:13px}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px 28px;max-width:1040px;width:100%;margin:0 auto}
+.notes h3{font-family:var(--font-title);font-weight:400;font-size:15px;letter-spacing:.08em;color:var(--ruler);margin:0 0 8px}
+.notes p{margin:0;color:var(--muted);max-width:60ch}
+.notes b{color:var(--ink);font-weight:700}
+.cpu-note{margin:0;color:var(--muted)}
+.cpu-note b{color:var(--c);font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="a">BOSS</span> <span class="b">FIGHT</span></h1>
+      <p class="tag">Co-op. Each player breaks one leg of the Stone King, then you both smash its core.</p>
+    </div>
+    <div class="actions">
+      <a class="btn" id="back" href="../index.html">BACK TO MENU (ESC)</a>
+      <button class="btn" id="sound" type="button" aria-pressed="true">SOUND ON</button>
+    </div>
+  </header>
+
+  <div class="screen">
+    <canvas id="screen" tabindex="0" aria-label="Boss Fight game screen. Click to give the game the keyboard."></canvas>
+  </div>
+
+  <div class="players">
+    <section class="player one">
+      <h2><span class="pname" id="pname1">PLAYER 1</span> <span>· LEFT LEG</span></h2>
+      <div class="keys">
+        <span><kbd>A</kbd><kbd>D</kbd></span> move
+        <span><kbd>F</kbd></span> attack (press again for a 3-hit combo)
+        <span><kbd>G</kbd></span> hold = block, tap just before a hit = parry
+        <span><kbd>S</kbd></span> dodge roll (can't be hit while rolling)
+      </div>
+    </section>
+    <section class="player two">
+      <h2><span class="pname" id="pname2">PLAYER 2</span> <span>· RIGHT LEG</span></h2>
+      <div class="keys">
+        <span><kbd class="arrow">&larr;</kbd><kbd class="arrow">&rarr;</kbd></span> move
+        <span><kbd>K</kbd><kbd>Num 0</kbd></span> attack (press again for a 3-hit combo)
+        <span><kbd>L</kbd><kbd>Num .</kbd></span> hold = block, tap just before a hit = parry
+        <span><kbd>&darr;</kbd></span> dodge roll (can't be hit while rolling)
+      </div>
+    </section>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>HOW TO WIN</h3>
+      <p>The boss blocks the middle, so each player can only reach their own leg. Break a leg and it stays broken for a few seconds. <b>Break both legs at the same time</b> and the boss collapses: its glowing core drops down. Smash it together. Too slow and the broken leg heals halfway.</p>
+    </div>
+    <div>
+      <h3>DEFENCE</h3>
+      <p><b>Block</b> (hold) stops the damage but pushes you back. <b>Parry</b> (tap block just before a hit) takes no damage and gives you <b>double damage</b> for 3 seconds. Parrying an arm swipe also stuns the boss. <b>Dodge roll</b> dodges anything, even the laser.</p>
+    </div>
+    <div>
+      <h3>BOSS ATTACKS</h3>
+      <p>The floor glows <b>red</b> where an attack is about to land. <b>Arm swipe</b> and <b>stomp shockwave</b>: block, parry or roll. <b>Eye laser</b> (red aim lines): can't be blocked, so move or roll. Below half health it gets angry: <b>falling rocks</b> and a <b>double stomp</b>. A knocked-down player gets back up after 10 seconds while the other is still standing.</p>
+    </div>
+  </div>
+</div>
+
+<script src="../js/players.js"></script>
+<script src="../js/fx.js"></script>
+<script>
+(() => {
+  // =====================================================================
+  // CONFIG: all the numbers you may want to change, in one place. Times are in seconds.
+  // Two numbers in [ ] = [normal phase, angry phase].
+  // =====================================================================
+  const CONFIG = {
+    player:  { hearts: 5, speed: 72, reviveTime: 10, reviveHearts: 3, hurtInvuln: 1.0 },
+    attack:  {
+      damage: [4, 4, 8],                         // the 3 hits of a combo
+      time: [0.24, 0.24, 0.36],                  // how long each swing takes
+      active: [[0.05, 0.14], [0.05, 0.14], [0.10, 0.22]],   // when the blade can hit
+      comboWindow: 0.3,                          // press attack within this time to continue the combo
+      reach: 18
+    },
+    dodge:   { time: 0.35, distance: 54, cooldown: 0.45 },
+    block:   { parryWindow: 0.2, blockStun: 0.25, parryCooldown: 0.45 },
+    counter: { time: 3, multiplier: 2 },         // after a parry: double damage
+    boss:    {
+      hp: 600, angryAt: 0.5, rest: [1.4, 0.85], stagger: 1.6,
+      weights: [                                 // chance of each attack
+        { swipe: 3, stomp: 3, laser: 2, rocks: 0, double: 0 },
+        { swipe: 3, stomp: 2, laser: 2, rocks: 2, double: 1.5 }
+      ]
+    },
+    leg:     { hp: 60, brokenTime: 6, healTo: 0.5, chip: 0.25 },   // chip = part of leg damage that also hurts the boss
+    collapse:{ time: 6, coreMultiplier: 1.5 },
+    swipe:   { warn: [0.75, 0.55], sweep: 0.35 },
+    stomp:   { warn: [0.85, 0.6], waveSpeed: 150 },
+    laser:   { warn: [1.0, 0.8], lockAt: 0.7, fire: 0.3, width: 11, damage: 2 },
+    rocks:   { count: 5, warn: 1.1 },
+    // only looks (they never change the game):
+    looks:   {
+      deathTime: 1.6,      // the boss shakes and explodes this long before the big final blast
+      debris: 28,          // stone chunks flying out of the final blast (half with "Low effects")
+      ghostEvery: 0.025    // a dodge roll leaves a ghost image this often (seconds)
+    }
+  };
+
+  // The game still thinks in a 320 x 180 screen; js/fx.js draws it sharp at full resolution.
+  const W = 320, H = 180, FLOOR = 160;
+  const cvs = document.getElementById('screen');
+  const header = document.querySelector('header');
+  const st = FX.stage(cvs, { width: W, height: H, margin: () => header.offsetHeight + 64 });
+  const ctx = st.ctx;
+
+  const css = getComputedStyle(document.documentElement);
+  const C = {};
+  ['screen','line','ink','muted','bad','p1','p2','ruler','neon','pink']
+    .forEach(k => C[k] = css.getPropertyValue('--' + k).trim());
+  const PC = [C.p1, C.p2];
+  const PC_DARK = ['#b34a2c', '#2a8fa6'];
+
+  // ---------- Player names: come from the page address, e.g. ?p1=VIRAJ&p2=KASUN ----------
+  const fromURL = Players.fromURL();
+  const NAMES = fromURL || Players.DEFAULTS.slice();
+  document.getElementById('pname1').textContent = NAMES[0];
+  document.getElementById('pname2').textContent = NAMES[1];
+  const backLink = document.getElementById('back');
+  if (fromURL) backLink.href = '../index.html' + Players.toQuery(NAMES, Players.cpuFromURL());
+
+  // ---------- Controls: left half vs right half of the keyboard ----------
+  const KEYS = [
+    { left: ['KeyA'], right: ['KeyD'], attack: ['KeyF'], block: ['KeyG'], dodge: ['KeyS'] },
+    { left: ['ArrowLeft'], right: ['ArrowRight'], attack: ['KeyK', 'Numpad0'], block: ['KeyL', 'NumpadDecimal'], dodge: ['ArrowDown'] }
+  ];
+  const ATTACK_LABEL = ['F', 'K'];
+  const ALL_KEYS = KEYS.flatMap(k => Object.values(k).flat());
+
+  // ---------- 1 player mode: the computer (CPU) is your partner and breaks the right leg ----------
+  // The level comes from the page address (?cpu=normal); null = two people are playing.
+  // In this co-op game the CPU is on your side, so EASY = a strong partner (an easy fight for you)
+  // and HARD = a weaker partner (you do more of the work).
+  const CPU = Players.cpuFromURL();
+  const CPU_LEVELS = {
+    // react: how long (s) it takes to notice a boss attack
+    // defend: the chance it blocks / dodges an attack at all (otherwise it gets hit)
+    // parry: when it defends, the chance it goes for a parry instead of a plain block
+    // attackGap: rest (s) between its sword swings
+    // teamwork: waits with the last hit on its leg until your leg is almost broken too
+    easy:   { react: 0.15, defend: 0.95, parry: 0.8, attackGap: 0.1,  teamwork: true },
+    normal: { react: 0.3,  defend: 0.75, parry: 0.3, attackGap: 0.25, teamwork: true },
+    hard:   { react: 0.45, defend: 0.55, parry: 0,   attackGap: 0.4,  teamwork: false }
+  };
+  // The CPU's "keys": cpuIn = held, cpuTap = pressed this step. isDown() and tapped() read
+  // them like a person's keys, so the CPU plays by exactly the same rules.
+  const cpuIn = { left: false, right: false, attack: false, block: false, dodge: false };
+  const cpuTap = new Set();
+  const cpu = { readyAt: null, swingAt: 0, blocking: false };
+  if (CPU) {
+    const level = CPU.toUpperCase();
+    document.querySelector('header .tag').textContent = 'Co-op with the CPU (' + level + '). You break the left leg of the Stone King, it breaks the right one, then you both smash its core.';
+    const two = document.querySelector('.player.two');
+    const help = { easy: 'a strong partner', normal: 'a good partner', hard: 'you do more of the work' }[CPU];
+    two.querySelector('.keys').outerHTML = '<p class="cpu-note">Played by the computer, your partner. Level: <b>' + level + '</b> (' + help + '). Change it on the menu.</p>';
+    two.querySelector('h2 span:last-child').textContent = '· RIGHT LEG · COMPUTER';
+    // playing alone, player 2's keys work for you too
+    for (const action in KEYS[0]) KEYS[0][action] = KEYS[0][action].concat(KEYS[1][action]);
+    document.querySelector('.player.one .keys').innerHTML =
+      '<span><kbd>A</kbd><kbd>D</kbd><kbd class="arrow">&larr;</kbd><kbd class="arrow">&rarr;</kbd></span> move' +
+      '<span><kbd>F</kbd><kbd>K</kbd></span> attack (press again for a 3-hit combo)' +
+      '<span><kbd>G</kbd><kbd>L</kbd></span> hold = block, tap just before a hit = parry' +
+      '<span><kbd>S</kbd><kbd>&darr;</kbd></span> dodge roll (can\'t be hit while rolling)';
+  }
+  // what player 2's plate says while waiting for a press
+  const pressText = p => (CPU && p === 1 ? 'WAITING' : 'PRESS ' + ATTACK_LABEL[p]);
+
+  const held = new Set(), pressed = new Set();
+  const isDown = (p, a) => (CPU && p === 1 ? cpuIn[a] : KEYS[p][a].some(c => held.has(c)));
+  const tapped = (p, a) => (CPU && p === 1 ? cpuTap.has(a) : KEYS[p][a].some(c => pressed.has(c)));
+
+  addEventListener('keydown', e => {
+    if (e.code === 'Escape') { location.href = backLink.href; return; }
+    if (!ALL_KEYS.includes(e.code)) return;
+    e.preventDefault();
+    held.add(e.code);
+    if (!e.repeat) pressed.add(e.code);
+    unlockAudio();
+  });
+  addEventListener('keyup', e => held.delete(e.code));
+  let focused = document.hasFocus();
+  addEventListener('focus', () => focused = true);
+  addEventListener('blur', () => { focused = false; held.clear(); });
+  cvs.addEventListener('pointerdown', () => { cvs.focus(); focused = true; unlockAudio(); });
+
+  // ---------- Sound: square-wave blips and noise bursts, no files ----------
+  let ac = null, muted = false;
+  function unlockAudio() {
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; } }
+    if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+  }
+  function tone(f, dur, type = 'square', vol = 0.05, slide = 0, delay = 0) {
+    if (!ac || muted) return;
+    const t0 = ac.currentTime + delay;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (slide) o.frequency.linearRampToValueAtTime(Math.max(40, f + slide), t0 + dur);
+    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise(dur, vol) {
+    if (!ac || muted) return;
+    const len = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ac.createBufferSource(), g = ac.createGain();
+    src.buffer = buf; g.gain.value = vol;
+    src.connect(g).connect(ac.destination); src.start();
+  }
+  const sfx = {
+    ready: p => tone(p ? 660 : 520, 0.08),
+    swing: () => tone(320, 0.05, 'triangle', 0.035, 260),
+    hit: () => { tone(170, 0.07, 'square', 0.06, -60); noise(0.05, 0.05); },
+    core: () => { tone(880, 0.07, 'square', 0.05); tone(1320, 0.1, 'square', 0.04, 0, 0.05); },
+    block: () => { tone(1100, 0.04, 'square', 0.04); tone(560, 0.07, 'square', 0.03, 0, 0.02); },
+    parry: () => { tone(1568, 0.1, 'square', 0.05); tone(2093, 0.2, 'triangle', 0.05, 0, 0.06); },
+    hurt: () => tone(240, 0.22, 'sawtooth', 0.06, -140),
+    dodge: () => tone(420, 0.07, 'triangle', 0.035, 320),
+    warn: () => tone(440, 0.05, 'square', 0.03),
+    charge: () => tone(180, 0.9, 'sawtooth', 0.025, 800),
+    laser: () => { tone(1300, 0.3, 'sawtooth', 0.04, -1000); noise(0.2, 0.04); },
+    stomp: () => { noise(0.35, 0.12); tone(70, 0.3, 'square', 0.08, -30); },
+    rock: () => { noise(0.15, 0.06); tone(120, 0.12, 'square', 0.04, -50); },
+    breakLeg: () => { noise(0.4, 0.1); tone(110, 0.4, 'square', 0.06, -60); },
+    roar: () => { tone(90, 0.8, 'sawtooth', 0.07, 40); noise(0.6, 0.05); },
+    boom: big => { noise(big ? 0.9 : 0.3, big ? 0.16 : 0.08); tone(big ? 80 : 130, big ? 0.7 : 0.25, 'square', big ? 0.08 : 0.04, -50); },
+    down: () => [392, 330, 262].forEach((f, i) => tone(f, 0.15, 'square', 0.05, 0, i * 0.12)),
+    win: () => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, 0.14, 'square', 0.05, 0, i * 0.11)),
+    lose: () => [392, 349, 311, 262].forEach((f, i) => tone(f, 0.22, 'triangle', 0.06, 0, i * 0.2))
+  };
+  const soundBtn = document.getElementById('sound');
+  soundBtn.addEventListener('click', () => {
+    muted = !muted; unlockAudio();
+    soundBtn.textContent = muted ? 'SOUND OFF' : 'SOUND ON';
+    soundBtn.setAttribute('aria-pressed', String(!muted));
+  });
+
+  // ---------- small helpers ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const randInt = n => Math.floor(Math.random() * n);
+  function hash(n) {
+    n = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b); n ^= n >>> 13;
+    n = Math.imul(n, 0xc2b2ae35); n ^= n >>> 16;
+    return n >>> 0;
+  }
+  const shake = amount => FX.shake(Math.min(1, amount * 2));   // 0.15 = small bump ... 0.6 = huge
+
+  // =====================================================================
+  // GAME STATE
+  // title -> fight -> win / lose -> (both press attack) -> fight ...
+  // =====================================================================
+  const S = { state: 'title', t: 0, time: 0, ready: [false, false], msg: null };
+  let players, boss, waves, rocks, clock = 0;
+  const LEG_X = [106, 188], LEG_W = 26;          // left leg, right leg
+  const CORE = [150, 170];                       // the core (only reachable when the boss collapses)
+
+  function newPlayer(p) {
+    return {
+      p, x: p ? 272 : 48, face: p ? -1 : 1, hp: CONFIG.player.hearts, down: false, downT: 0,
+      atk: null, comboT: 0, nextStep: 0, roll: null, rollCD: 0,
+      blocking: false, blockPressT: 9, sinceBlockTap: 9,
+      stunT: 0, invulnT: 0, counterT: 0, kick: 0, walkT: 0,
+      stats: { dmg: 0, parries: 0 }
+    };
+  }
+  function newBoss() {
+    return {
+      hp: CONFIG.boss.hp, phase: 1, act: null, rest: 2.5, staggerT: 0,
+      collapseT: 0, lower: 0, coreFlash: 0, dead: false,
+      legs: [0, 1].map(() => ({ hp: CONFIG.leg.hp, brokenT: 0, flash: 0, lift: 0 }))
+    };
+  }
+
+  // =====================================================================
+  // EFFECTS: only looks, they never change the game
+  // =====================================================================
+  const anim = {
+    hitT: 0,                 // the boss flashes white for this long after a hit
+    hpTrail: CONFIG.boss.hp, trailHold: 0,   // the white "lost health" part of the boss bar
+    deathAt: -1, boomAt: 0, exploded: false, explodedAt: 0,   // the boss blowing up
+    debris: [], ghosts: [], ghostAt: [0, 0], scorch: [],
+    readyAt: [-9, -9], confettiAt: 0, msgSeen: null
+  };
+  function resetLooks() {
+    anim.hitT = 0; anim.hpTrail = CONFIG.boss.hp; anim.trailHold = 0;
+    anim.deathAt = -1; anim.exploded = false;
+    anim.debris = []; anim.ghosts = []; anim.scorch = [];
+  }
+  const STONE = ['#8f86d6', '#6a62a8', '#4a4280'];
+  const effects = {
+    ready(p) { anim.readyAt[p] = FX.time; FX.sparks(p ? 272 : 48, 120, { color: PC[p], count: 10, speed: 60, gravity: 30 }); },
+    start() { shake(0.4); FX.flash(C.bad, 0.3, 0.15); },
+    // a hit on a leg: white flash, damage number, sparks and stone chips
+    legHit(pl, dmg, hx, counter, big) {
+      anim.hitT = 0.07; anim.trailHold = 0.45;
+      FX.text(String(dmg), hx, 124, { color: counter ? C.ruler : '#ffffff', size: big ? 13 : counter ? 12 : 9, shake: big ? 3 : 0, life: 0.8, rise: 18 });
+      FX.sparks(hx, 140, { color: PC[pl.p], count: big ? 14 : 7, speed: big ? 130 : 90, angle: pl.p ? 0 : Math.PI, spread: 2, gravity: 60 });
+      FX.sparks(hx, 142, { color: STONE[randInt(3)], count: 5, speed: 70, gravity: 260, size: 1.6 });
+      if (big) shake(0.15);
+    },
+    coreHit(pl, dmg) {
+      anim.hitT = 0.08; anim.trailHold = 0.45;
+      FX.text(String(dmg), 160 + rand(-10, 10), 70, { color: PC[pl.p], size: 14, shake: 3, life: 0.9, rise: 18 });   // above the fallen head
+      FX.sparks(160, 132, { color: C.ruler, count: 14, speed: 140, gravity: 50 });
+      FX.sparks(160, 132, { color: PC[pl.p], count: 8, speed: 110, gravity: 50 });
+      FX.flash(C.ruler, 0.08, 0.08);
+      shake(0.12);
+    },
+    breakLeg(s) {
+      FX.explosion(LEG_X[s] + 13, 140, { color: bossColors().edge, size: 0.9 });
+      FX.sparks(LEG_X[s] + 13, 145, { color: STONE[1], count: 18, speed: 140, gravity: 280, size: 2 });
+      FX.smoke(LEG_X[s] + 13, FLOOR - 6, { count: 8, size: 6, color: '#5a547e' });
+      FX.text('CRACK!', LEG_X[s] + 13, 110, { color: PC[s], size: 12, shake: 3 });
+      shake(0.3);
+    },
+    parry(pl) {
+      FX.text('PARRY!', pl.x, FLOOR - 32, { color: C.ruler, size: 11, life: 0.8 });
+      FX.explosion(pl.x + pl.face * 8, FLOOR - 10, { color: C.ruler, size: 0.5 });
+      FX.flash(C.ruler, 0.1, 0.12);
+    },
+    block(pl) {
+      FX.text('BLOCK', pl.x, FLOOR - 30, { color: C.muted, size: 8, life: 0.6, rise: 10 });
+      FX.sparks(pl.x + pl.face * 8, FLOOR - 10, { color: '#ffffff', count: 6, speed: 80, angle: pl.face > 0 ? 0 : Math.PI, spread: 1.6, gravity: 80 });
+    },
+    hurt(pl) {
+      FX.sparks(pl.x, FLOOR - 8, { color: C.bad, count: 10, speed: 100, gravity: 120 });
+      FX.sparks(pl.x, FLOOR - 8, { color: PC[pl.p], count: 6, speed: 80, gravity: 120 });
+      FX.flash(C.bad, 0.15, 0.1);
+      shake(0.15);
+    },
+    down(pl) { FX.explosion(pl.x, FLOOR - 8, { color: PC[pl.p], size: 0.6 }); },
+    revive(pl) {
+      FX.text('BACK!', pl.x, FLOOR - 30, { color: PC[pl.p], size: 10 });
+      FX.explosion(pl.x, FLOOR - 8, { color: PC[pl.p], size: 0.5 });
+    },
+    dodge(pl) { FX.smoke(pl.x, FLOOR - 2, { count: 3, size: 3, grow: 6, color: '#8a84b8', alpha: 0.3 }); },
+    stomp(s) {
+      const x = LEG_X[s] + 13;
+      FX.smoke(x, FLOOR - 3, { count: 8, size: 5, grow: 12, color: '#6d6890', alpha: 0.4 });
+      FX.sparks(x, FLOOR - 2, { color: bossColors().edge, count: 12, speed: 120, angle: -Math.PI / 2, spread: 2.6, gravity: 200 });
+      shake(0.3);
+    },
+    laserFire(x) {
+      FX.flash(C.bad, 0.12, 0.15);
+      FX.sparks(x, FLOOR - 2, { color: C.bad, count: 18, speed: 130, angle: -Math.PI / 2, spread: 2.4, gravity: 160 });
+      FX.sparks(x, FLOOR - 2, { color: C.ruler, count: 10, speed: 90, angle: -Math.PI / 2, spread: 2, gravity: 160 });
+      anim.scorch.push({ x, t0: FX.time });
+      if (anim.scorch.length > 6) anim.scorch.shift();
+      shake(0.15);
+    },
+    rockLand(x) {
+      FX.smoke(x, FLOOR - 3, { count: 5, size: 4, grow: 10, color: '#6d6890', alpha: 0.4 });
+      FX.sparks(x, FLOOR - 4, { color: STONE[0], count: 10, speed: 100, angle: -Math.PI / 2, spread: 2.4, gravity: 300, size: 1.6 });
+      shake(0.1);
+    },
+    stun() {
+      FX.text('STUNNED!', 160, 40, { color: C.ruler, size: 12, shake: 2 });
+      FX.sparks(160, 50, { color: C.ruler, count: 12, speed: 80, gravity: 40 });
+    },
+    collapse() {
+      FX.flash(C.ruler, 0.2, 0.15); shake(0.5);
+      for (const x of [110, 160, 210]) FX.smoke(x, FLOOR - 4, { count: 5, size: 7, grow: 14, color: '#5a547e', alpha: 0.4 });
+    },
+    standUp() { shake(0.3); FX.smoke(160, FLOOR - 4, { count: 6, size: 7, grow: 14, color: '#5a547e', alpha: 0.35 }); },
+    angry() { shake(0.4); FX.flash(C.bad, 0.3, 0.25); FX.sparks(160, 60, { color: C.bad, count: 30, speed: 160, gravity: 40 }); },
+    win() { anim.deathAt = FX.time; anim.boomAt = FX.time; anim.exploded = false; shake(0.6); },
+    lose() { FX.flash(C.bad, 0.5, 0.3); shake(0.4); }
+  };
+
+  function reset() {
+    players = [newPlayer(0), newPlayer(1)];
+    boss = newBoss();
+    waves = []; rocks = [];
+    S.time = 0; S.msg = null;
+    resetLooks();
+  }
+  function startFight() {
+    reset();
+    S.state = 'fight'; S.t = 0;
+    say('THE STONE KING AWAKENS!', C.ruler);
+    sfx.roar(); effects.start();
+  }
+  reset();
+
+  function say(s, color = C.ink) { S.msg = { s, color, t: 0 }; }
+
+  // =====================================================================
+  // PLAYERS
+  // =====================================================================
+  // How far each player can walk: the boss's body blocks the middle (except when it collapses)
+  function bounds(p) {
+    const open = boss.lower > 0.6;
+    return p === 0 ? [8, open ? 140 : 98] : [open ? 180 : 222, 312];
+  }
+  const awayFromBoss = p => (p === 0 ? -1 : 1);
+
+  function startSlash(pl, n) {
+    pl.atk = { n, t: 0, hit: false, queued: false };
+    sfx.swing();
+  }
+
+  function updatePlayer(pl, dt) {
+    for (const k of ['invulnT', 'stunT', 'counterT', 'rollCD']) if (pl[k] > 0) pl[k] -= dt;
+    pl.blockPressT += dt; pl.sinceBlockTap += dt;
+    if (pl.down) {
+      pl.downT -= dt;
+      const other = players[1 - pl.p];
+      if (pl.downT <= 0 && !other.down) {        // back up while your partner is still fighting
+        pl.down = false; pl.hp = CONFIG.player.reviveHearts; pl.invulnT = 2;
+        effects.revive(pl);
+      }
+      return;
+    }
+    const move = (isDown(pl.p, 'right') ? 1 : 0) - (isDown(pl.p, 'left') ? 1 : 0);
+
+    // ----- dodge roll: can't be hit while rolling -----
+    if (tapped(pl.p, 'dodge') && !pl.roll && pl.rollCD <= 0 && pl.stunT <= 0) {
+      pl.roll = { t: 0, dir: move || pl.face };
+      pl.atk = null; pl.blocking = false;
+      sfx.dodge(); effects.dodge(pl);
+    }
+    if (pl.roll) {
+      pl.roll.t += dt;
+      pl.x += pl.roll.dir * CONFIG.dodge.distance / CONFIG.dodge.time * dt;
+      if (pl.roll.t >= CONFIG.dodge.time) { pl.roll = null; pl.rollCD = CONFIG.dodge.cooldown; }
+    } else {
+      // ----- block and parry -----
+      // A parry is a block that was pressed less than parryWindow before the hit.
+      // Mashing doesn't work: a new parry window only opens after parryCooldown.
+      if (tapped(pl.p, 'block')) {
+        if (pl.sinceBlockTap > CONFIG.block.parryCooldown) pl.blockPressT = 0;
+        pl.sinceBlockTap = 0;
+      }
+      pl.blocking = isDown(pl.p, 'block') && !pl.atk;
+
+      // ----- attack combo: 1, 2, 3 -----
+      if (tapped(pl.p, 'attack') && pl.stunT <= 0 && !pl.blocking) {
+        if (!pl.atk) startSlash(pl, pl.comboT > 0 ? pl.nextStep : 0);
+        else pl.atk.queued = true;
+      }
+      if (pl.atk) {
+        const A = CONFIG.attack, a = pl.atk;
+        a.t += dt;
+        if (!a.hit && a.t >= A.active[a.n][0] && a.t <= A.active[a.n][1]) swordHit(pl);
+        if (a.t >= A.time[a.n]) {
+          if (a.queued && a.n < 2) startSlash(pl, a.n + 1);
+          else { pl.atk = null; pl.comboT = A.comboWindow; pl.nextStep = (a.n + 1) % 3; }
+        }
+      } else if (pl.comboT > 0) pl.comboT -= dt;
+
+      // ----- walking -----
+      if (!pl.atk && !pl.blocking && pl.stunT <= 0 && move) {
+        pl.x += move * CONFIG.player.speed * dt;
+        pl.face = move; pl.walkT += dt;
+      } else pl.walkT = 0;
+    }
+    pl.x += pl.kick * dt;
+    pl.kick *= Math.exp(-8 * dt);
+    const [lo, hi] = bounds(pl.p);
+    pl.x = clamp(pl.x, lo, hi);
+  }
+
+  // The blade only reaches your own leg (or the core when the boss is down)
+  function swordHit(pl) {
+    const reach = CONFIG.attack.reach + (pl.atk.n === 2 ? 6 : 0);
+    const [a, b] = pl.face > 0 ? [pl.x + 2, pl.x + 2 + reach] : [pl.x - 2 - reach, pl.x - 2];
+    const overlaps = (lo, hi) => a < hi && b > lo;
+    let dmg = CONFIG.attack.damage[pl.atk.n] * (pl.counterT > 0 ? CONFIG.counter.multiplier : 1);
+    if (boss.lower >= 0.95 && overlaps(CORE[0], CORE[1])) {
+      pl.atk.hit = true;
+      dmg = Math.round(dmg * CONFIG.collapse.coreMultiplier);
+      boss.hp -= dmg; boss.coreFlash = 0.1;
+      pl.stats.dmg += dmg;
+      effects.coreHit(pl, dmg);
+      sfx.core();
+      checkBoss();
+      return;
+    }
+    const leg = boss.legs[pl.p];
+    if (boss.lower < 0.05 && leg.brokenT <= 0 && overlaps(LEG_X[pl.p], LEG_X[pl.p] + LEG_W)) {
+      pl.atk.hit = true;
+      leg.hp -= dmg; leg.flash = 0.08;
+      boss.hp -= dmg * CONFIG.leg.chip;
+      pl.stats.dmg += dmg;
+      const hx = LEG_X[pl.p] + (pl.p ? LEG_W - 4 : 4);
+      effects.legHit(pl, dmg, hx, pl.counterT > 0, pl.atk.n === 2);
+      sfx.hit();
+      if (leg.hp <= 0) breakLeg(pl.p);
+      checkBoss();
+    }
+  }
+
+  // Every boss attack goes through here. Returns 'miss', 'parry', 'block' or 'hit'.
+  function hurtPlayer(pl, dmg, blockable) {
+    if (pl.down || pl.roll || pl.invulnT > 0) return 'miss';
+    const away = awayFromBoss(pl.p);
+    if (blockable && pl.blocking) {
+      if (pl.blockPressT <= CONFIG.block.parryWindow) {
+        pl.counterT = CONFIG.counter.time; pl.stats.parries++;
+        pl.blockPressT = 9;
+        effects.parry(pl);
+        sfx.parry();
+        return 'parry';
+      }
+      pl.stunT = CONFIG.block.blockStun; pl.kick = away * 110;
+      effects.block(pl);
+      sfx.block();
+      return 'block';
+    }
+    pl.hp -= dmg; pl.invulnT = CONFIG.player.hurtInvuln; pl.stunT = 0.3;
+    pl.kick = away * 170; pl.atk = null; pl.blocking = false;
+    effects.hurt(pl);
+    if (pl.hp <= 0) {
+      pl.hp = 0; pl.down = true; pl.downT = CONFIG.player.reviveTime;
+      sfx.down(); effects.down(pl);
+      if (players.every(q => q.down)) { S.state = 'lose'; S.t = 0; S.ready = [false, false]; sfx.lose(); effects.lose(); }
+      else say(NAMES[pl.p] + ' IS DOWN!', C.bad);
+    } else sfx.hurt();
+    return 'hit';
+  }
+
+  // =====================================================================
+  // THE BOSS
+  // =====================================================================
+  function breakLeg(s) {
+    const leg = boss.legs[s];
+    leg.hp = 0; leg.brokenT = CONFIG.leg.brokenTime; leg.lift = 0;
+    sfx.breakLeg(); effects.breakLeg(s);
+    const a = boss.act;                          // a broken leg stops the attacks on that side
+    if (a && ((a.side === s && (a.type === 'swipe' || a.type === 'stomp')) || a.type === 'double')) endAct();
+    if (boss.legs[1 - s].brokenT > 0) {          // both legs broken: it falls!
+      boss.collapseT = CONFIG.collapse.time; boss.act = null;
+      say('IT COLLAPSED! HIT THE CORE!', C.ruler);
+      effects.collapse();
+    } else say('LEG BROKEN! NOW THE OTHER ONE!', PC[s]);
+  }
+
+  function standUp() {
+    boss.legs.forEach(l => { l.hp = CONFIG.leg.hp; l.brokenT = 0; });
+    boss.rest = 1.5;
+    say('IT GETS BACK UP!', C.bad);
+    sfx.roar(); effects.standUp();
+    players.forEach(pl => { pl.kick = awayFromBoss(pl.p) * 160; });
+  }
+
+  function checkBoss() {
+    if (boss.phase === 1 && boss.hp <= CONFIG.boss.hp * CONFIG.boss.angryAt) {
+      boss.phase = 2;
+      say('THE STONE KING IS ANGRY!', C.bad);
+      sfx.roar(); effects.angry();
+    }
+    if (boss.hp <= 0 && S.state === 'fight') {
+      boss.hp = 0; boss.dead = true; boss.act = null;
+      S.state = 'win'; S.t = 0; S.ready = [false, false];
+      effects.win();
+      sfx.win();
+    }
+  }
+
+  function endAct() {
+    boss.act = null;
+    boss.rest = CONFIG.boss.rest[boss.phase - 1] * rand(0.8, 1.2);
+    boss.legs.forEach(l => { l.lift = 0; });
+  }
+
+  // Pick the next attack. Swipe and stomp only go at a side whose leg is unbroken and whose player is up.
+  function startAct() {
+    const ph = boss.phase - 1, w = CONFIG.boss.weights[ph];
+    const sides = [0, 1].filter(s => !players[s].down && boss.legs[s].brokenT <= 0);
+    const alive = [0, 1].filter(s => !players[s].down);
+    if (!alive.length) return;
+    const options = [['laser', w.laser]];
+    if (sides.length) options.push(['swipe', w.swipe], ['stomp', w.stomp]);
+    if (sides.length === 2 && w.double) options.push(['double', w.double]);
+    if (w.rocks) options.push(['rocks', w.rocks]);
+    let r = Math.random() * options.reduce((sum, o) => sum + o[1], 0), type = 'laser';
+    for (const [name, weight] of options) { r -= weight; if (r < 0) { type = name; break; } }
+    const side = type === 'laser' || type === 'rocks' ? alive[randInt(alive.length)] : sides[randInt(sides.length)];
+    const warnOf = { swipe: CONFIG.swipe.warn, stomp: CONFIG.stomp.warn, double: CONFIG.stomp.warn, laser: CONFIG.laser.warn };
+    boss.act = { type, t: 0, side, warn: warnOf[type] ? warnOf[type][ph] : 0, hit: [false, false], aimX: players[side].x };
+    if (type === 'laser') sfx.charge(); else sfx.warn();
+    if (type === 'rocks') {
+      for (let i = 0; i < CONFIG.rocks.count; i++) {
+        // one rock aimed at each player, the rest anywhere on the floor
+        const x = i < 2 && !players[i].down ? players[i].x + rand(-10, 10)
+                : (Math.random() < 0.5 ? rand(10, 140) : rand(180, 310));
+        rocks.push({ x, t: -i * 0.12 });
+      }
+    }
+  }
+
+  function updateAct(dt) {
+    const a = boss.act;
+    a.t += dt;
+    if (a.type === 'swipe') {
+      if (a.t < a.warn) return;
+      const u = (a.t - a.warn) / CONFIG.swipe.sweep;
+      if (u >= 1) { endAct(); return; }
+      a.fistX = a.side ? lerp(226, 318, u) : lerp(94, 2, u);
+      const pl = players[a.side];
+      if (!a.hit[a.side] && Math.abs(pl.x - a.fistX) < 12) {
+        const res = hurtPlayer(pl, 1, true);
+        if (res !== 'miss') a.hit[a.side] = true;
+        if (res === 'parry') {                   // parrying the arm stuns the boss
+          boss.staggerT = CONFIG.boss.stagger;
+          say('STUNNED! ATTACK!', C.ruler);
+          effects.stun();
+          endAct();
+        }
+      }
+    } else if (a.type === 'stomp' || a.type === 'double') {
+      const sides = a.type === 'double' ? [0, 1].filter(s => boss.legs[s].brokenT <= 0) : [a.side];
+      if (a.t < a.warn) { sides.forEach(s => { boss.legs[s].lift = Math.min(1, a.t / (a.warn * 0.7)); }); return; }
+      if (!a.slammed) {
+        a.slammed = true;
+        sides.forEach(s => {
+          boss.legs[s].lift = 0;
+          waves.push({ x: s ? LEG_X[1] + LEG_W + 2 : LEG_X[0] - 2, dir: s ? 1 : -1, side: s, hit: false });
+          effects.stomp(s);
+        });
+        sfx.stomp();
+      }
+      if (a.t > a.warn + 0.5) endAct();
+    } else if (a.type === 'laser') {
+      const target = players[a.side];
+      if (a.t < a.warn * CONFIG.laser.lockAt) a.aimX = target.x;   // follows you, then locks in place
+      if (a.t >= a.warn) {
+        if (!a.fired) { a.fired = true; sfx.laser(); effects.laserFire(a.aimX); }
+        for (const pl of players) {
+          if (!a.hit[pl.p] && Math.abs(pl.x - a.aimX) < CONFIG.laser.width && hurtPlayer(pl, CONFIG.laser.damage, false) !== 'miss') a.hit[pl.p] = true;
+        }
+        if (a.t >= a.warn + CONFIG.laser.fire) endAct();
+      }
+    } else if (a.type === 'rocks') {
+      if (a.t > 0.4) endAct();
+    }
+  }
+
+  function updateBoss(dt) {
+    boss.coreFlash -= dt;
+    for (const [s, leg] of boss.legs.entries()) {
+      leg.flash -= dt;
+      if (leg.brokenT > 0 && boss.collapseT <= 0) {
+        leg.brokenT -= dt;
+        if (leg.brokenT <= 0) {                  // too slow: the leg heals halfway
+          leg.brokenT = 0; leg.hp = CONFIG.leg.hp * CONFIG.leg.healTo;
+          say('TOO SLOW! THE LEG HEALED', PC[s]);
+        }
+      }
+    }
+    if (boss.collapseT > 0) {
+      boss.lower = Math.min(1, boss.lower + dt * 3);
+      boss.collapseT -= dt;
+      if (boss.collapseT <= 0) standUp();
+      return;
+    }
+    boss.lower = Math.max(0, boss.lower - dt * 2);
+    if (boss.staggerT > 0) { boss.staggerT -= dt; return; }
+    if (boss.lower > 0) return;
+    if (boss.act) updateAct(dt);
+    else if ((boss.rest -= dt) <= 0) startAct();
+  }
+
+  function updateEffects(dt) {
+    for (const w of waves) {                     // stomp shockwaves slide along the floor
+      w.x += w.dir * CONFIG.stomp.waveSpeed * dt;
+      const pl = players[w.side];
+      if (!w.hit && Math.abs(pl.x - w.x) < 7) {
+        const res = hurtPlayer(pl, 1, true);
+        if (res !== 'miss') w.hit = true;
+        if (res === 'parry' || res === 'block') w.dead = true;
+      }
+      if (w.x < -10 || w.x > W + 10) w.dead = true;
+    }
+    waves = waves.filter(w => !w.dead);
+    for (const r of rocks) {                     // falling rocks: the warning circle grows, then it lands
+      r.t += dt;
+      if (r.t >= CONFIG.rocks.warn) {
+        r.dead = true;
+        for (const pl of players) if (Math.abs(pl.x - r.x) < 10) hurtPlayer(pl, 1, true);
+        effects.rockLand(r.x);
+        sfx.rock();
+      }
+    }
+    rocks = rocks.filter(r => !r.dead);
+    if (S.msg) S.msg.t += dt;
+  }
+
+  // =====================================================================
+  // 1 PLAYER MODE: the CPU decides which "keys" to hold for player 2
+  // =====================================================================
+  // Each boss attack gets one plan the moment the CPU first sees it: 'parry', 'block' or 'none' (gets hit).
+  const cpuPlan = L => (Math.random() < L.defend ? (Math.random() < L.parry ? 'parry' : 'block') : 'none');
+
+  // Every attack that can hit the CPU, with how long (s) until it lands
+  function cpuThreats(pl, L) {
+    const list = [], a = boss.act;
+    if (a && a.t >= L.react) {
+      if (!a.plan) a.plan = cpuPlan(L);
+      if (a.type === 'swipe' && a.side === 1 && !a.hit[1]) {   // the fist sweeps out from the leg
+        const u = clamp((pl.x - 12 - 226) / 92, 0, 1);
+        list.push({ t: a.warn + u * CONFIG.swipe.sweep - a.t, plan: a.plan });
+      }
+      if ((a.type === 'stomp' && a.side === 1) || (a.type === 'double' && boss.legs[1].brokenT <= 0)) {
+        if (!a.slammed) list.push({ t: a.warn - a.t + Math.max(0, pl.x - 223) / CONFIG.stomp.waveSpeed, plan: a.plan });
+      }
+      if (a.type === 'laser') list.push({ laser: true, plan: a.plan });
+    }
+    for (const w of waves) {
+      if (w.side !== 1 || w.hit || w.x > pl.x) continue;
+      if (!w.plan) w.plan = (a && a.plan) || cpuPlan(L);   // same plan as the stomp that made it
+      list.push({ t: (pl.x - 7 - w.x) / CONFIG.stomp.waveSpeed, plan: w.plan });
+    }
+    for (const r of rocks) {
+      if (r.t < L.react || Math.abs(pl.x - r.x) >= 14) continue;
+      if (!r.plan) r.plan = cpuPlan(L);
+      list.push({ t: CONFIG.rocks.warn - r.t, plan: r.plan });
+    }
+    return list;
+  }
+
+  function cpuThink() {
+    cpuTap.clear();
+    for (const k in cpuIn) cpuIn[k] = false;
+    const L = CPU_LEVELS[CPU];
+    if (S.state !== 'fight') {
+      if (S.t > 1 && S.ready[0] && !S.ready[1]) {
+        if (cpu.readyAt == null) cpu.readyAt = clock + 0.4;   // gets ready a moment after you
+        if (clock >= cpu.readyAt) { cpu.readyAt = null; cpuTap.add('attack'); }
+      }
+      cpu.blocking = false;
+      return;
+    }
+    const pl = players[1];
+    if (pl.down) { cpu.blocking = false; return; }
+    const threats = cpuThreats(pl, L);
+
+    // ----- defence: block / parry what is about to land, step or roll out of a laser -----
+    let block = false, danger = false, target = null;
+    for (const th of threats) {
+      if (th.plan === 'none') continue;
+      if (th.laser) {
+        const a = boss.act;
+        if (a.t < a.warn * CONFIG.laser.lockAt || a.fired) continue;   // still aiming, or already over
+        if (Math.abs(pl.x - a.aimX) < CONFIG.laser.width + 3) {
+          target = a.aimX + 18 <= 312 ? a.aimX + 18 : a.aimX - 18;
+          if (a.warn - a.t < 0.12 && !pl.roll) { cpuTap.add('dodge'); cpuIn[target > pl.x ? 'right' : 'left'] = true; }   // too late to walk: roll
+        }
+        continue;
+      }
+      if (th.t < 0.7 && th.t > -0.1) danger = true;   // don't start a new swing now: it would stop the block
+      if (th.t <= (th.plan === 'parry' ? 0.1 : 0.35) && th.t > -0.1) block = true;
+    }
+    if (block) {
+      if (!cpu.blocking) cpuTap.add('block');    // the press opens the parry window
+      cpuIn.block = true; cpu.blocking = true;
+      return;
+    }
+    cpu.blocking = false;
+
+    // ----- go where the sword reaches: its own leg, or the core when the boss is down -----
+    if (target == null) target = boss.lower > 0.6 ? 182 : bounds(1)[0] + 2;
+    const dx = target - pl.x;
+    if (Math.abs(dx) > 3) { cpuIn[dx > 0 ? 'right' : 'left'] = true; return; }
+    if (pl.face !== -1) { cpuIn.left = true; return; }   // turn to face the boss
+
+    // ----- attack -----
+    const myLeg = boss.legs[1], yourLeg = boss.legs[0];
+    const wait = L.teamwork && boss.lower < 0.05 && !players[0].down && yourLeg.brokenT <= 0
+              && myLeg.hp <= 12 && yourLeg.hp > 20;   // last hit: wait until your leg is nearly broken too
+    if (danger || wait || (myLeg.brokenT > 0 && boss.lower < 0.05)) return;   // (a broken leg can't be hit)
+    if (!pl.atk && clock >= cpu.swingAt) { cpuTap.add('attack'); cpu.swingAt = clock + CONFIG.attack.time[0] + L.attackGap; }
+  }
+
+  // ---------- One small step of the game (120 per second) ----------
+  const STEP = 1 / 120;
+  function update(dt) {
+    clock += dt; S.t += dt;
+    if (CPU) cpuThink();
+    if (S.state !== 'fight') {
+      // (presses in the first second don't count, so mashing attack as the fight ends doesn't skip this screen)
+      for (const p of [0, 1]) if (S.t > 1 && tapped(p, 'attack') && !S.ready[p]) { S.ready[p] = true; sfx.ready(p); effects.ready(p); }
+      if (S.ready[0] && S.ready[1]) { S.ready = [false, false]; startFight(); }
+    }
+    if (S.state === 'fight') {
+      S.time += dt;
+      players.forEach(pl => updatePlayer(pl, dt));
+      if (S.state === 'fight') updateBoss(dt);
+    }
+    updateEffects(dt);
+    pressed.clear();
+  }
+
+  // ---------- looks that move with real time (dodge ghosts, the boss exploding, flying stone) ----------
+  function updateLooks(dt) {
+    if (anim.hitT > 0) anim.hitT -= dt;
+    // the white "lost health" part of the boss bar waits a moment, then slides down
+    if (boss.hp >= anim.hpTrail) anim.hpTrail = boss.hp;
+    else if (anim.trailHold > 0) anim.trailHold -= dt;
+    else anim.hpTrail = Math.max(boss.hp, anim.hpTrail - CONFIG.boss.hp * 0.6 * dt);
+    // a dodge roll leaves glowing ghost images
+    for (const pl of players) {
+      if (pl.roll && !FX.low && FX.time - anim.ghostAt[pl.p] >= CONFIG.looks.ghostEvery) {
+        anim.ghostAt[pl.p] = FX.time;
+        anim.ghosts.push({ p: pl.p, x: pl.x, ang: rollAngle(pl), t0: FX.time });
+      }
+    }
+    anim.ghosts = anim.ghosts.filter(g => FX.time - g.t0 < 0.3);
+    // stomp shockwaves throw up little sparks
+    if (!FX.low) for (const w of waves) if (Math.random() < 0.5) {
+      FX.sparks(w.x, FLOOR - 2, { color: bossColors().edge, count: 1, speed: 50, angle: -Math.PI / 2 - w.dir * 0.6, spread: 0.8, gravity: 200 });
+    }
+    // torch embers
+    if (!FX.low && Math.random() < dt * 3) {
+      const tx = Math.random() < 0.5 ? 40 : 280;
+      FX.sparks(tx, 62, { color: '#ff9f1c', count: 1, speed: 25, angle: -Math.PI / 2, spread: 0.7, gravity: -15, size: 0.8, life: 2 });
+    }
+    // the boss blows up: small explosions all over it, then one huge blast
+    if (boss.dead && anim.deathAt >= 0 && !anim.exploded) {
+      const k = FX.time - anim.deathAt, low = boss.lower * 48;
+      if (FX.time >= anim.boomAt) {
+        anim.boomAt = FX.time + rand(0.08, 0.15);
+        FX.explosion(rand(108, 212), rand(40 + low, 130), { color: Math.random() < 0.5 ? bossColors().edge : C.ruler, size: rand(0.45, 0.85) });
+        anim.hitT = 0.05; shake(0.15); sfx.boom(false);
+      }
+      if (k >= CONFIG.looks.deathTime) bigBlast();
+    }
+    if (anim.exploded && S.state === 'win' && FX.time - anim.confettiAt > 1.4) {   // winner screen: keep the confetti coming
+      anim.confettiAt = FX.time;
+      FX.confettiRain(0, W, 0, { colors: [C.p1, C.p2, C.ruler, '#ffffff'], count: 26 });
+    }
+    // flying stone chunks fall, bounce and settle on the floor
+    for (const d of anim.debris) {
+      if (d.rest) continue;
+      d.vy += 320 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.rot += d.vr * dt;
+      if (d.y > FLOOR - d.s / 2) {
+        d.y = FLOOR - d.s / 2; d.vy *= -0.35; d.vx *= 0.6; d.vr *= 0.6;
+        if (Math.abs(d.vy) < 20) { d.vy = 0; d.rest = Math.abs(d.vx) < 5; }
+      }
+      if (d.x < 4 || d.x > W - 4) { d.x = clamp(d.x, 4, W - 4); d.vx *= -0.5; }
+    }
+  }
+  function bigBlast() {
+    anim.exploded = true; anim.explodedAt = FX.time; anim.confettiAt = FX.time;
+    const K = bossColors(), low = boss.lower * 48;
+    FX.explosion(160, 80 + low * 0.6, { color: C.ruler, size: 2.2 });
+    FX.explosion(126, 104, { color: K.edge, size: 1.3 });
+    FX.explosion(194, 104, { color: K.edge, size: 1.3 });
+    for (const x of [110, 140, 180, 210]) FX.smoke(x, FLOOR - 10, { count: 6, size: 8, grow: 18, color: '#5a547e', alpha: 0.45 });
+    FX.flash('#ffffff', 0.6, 0.9);
+    FX.shake(1);
+    sfx.boom(true);
+    const n = FX.low ? Math.ceil(CONFIG.looks.debris / 2) : CONFIG.looks.debris;
+    for (let i = 0; i < n; i++) {
+      const a = rand(-Math.PI * 0.95, -Math.PI * 0.05), v = rand(80, 260);
+      anim.debris.push({ x: rand(120, 200), y: rand(70, 130) + low * 0.5, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+        rot: rand(0, 6), vr: rand(-12, 12), s: rand(3, 8), c: randInt(3), shape: randInt(4), rest: false });
+    }
+    setTimeout(() => FX.confetti(W / 2, 120, { colors: [C.p1, C.p2, C.ruler, '#ffffff'], count: 120, speed: 230 }), 250);
+  }
+
+  // =====================================================================
+  // DRAWING
+  // =====================================================================
+  const T = (s, x, y, color, size = 8, o = {}) => FX.drawText(ctx, s, x, y, Object.assign({ size, color }, o));
+  const WHITE = { stone: '#ffffff', dark: '#e2dcff', light: '#ffffff', edge: '#ffffff', crack: '#ffffff' };
+  function bossColors() {
+    return boss.phase === 2
+      ? { stone: '#4e2a5e', dark: '#2f1840', light: '#73408a', edge: '#ff4f6d', crack: '#ff6a5c' }
+      : { stone: '#373070', dark: '#221d4c', light: '#554ca0', edge: '#b45cff', crack: '#c98bff' };
+  }
+  function rr(x, y, w, h, r, fill) { FX.roundRect(ctx, x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); }
+  function outline(color, a = 0.6, w = 0.7) { ctx.strokeStyle = FX.rgba(color, a); ctx.lineWidth = w; ctx.stroke(); }
+  function glow(color, x, y, r, a = 1) {         // a soft neon light (skipped with "Low effects")
+    if (FX.low || a <= 0) return;
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a;
+    ctx.drawImage(FX.glowDot(color), x - r, y - r, r * 2, r * 2);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+  // a glowing line (cracks, laser, blades): soft wide glow + bright thin core
+  function neonLine(pts, color, width = 0.8, a = 1) {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+    if (!FX.low) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = FX.rgba(color, 0.3 * a); ctx.lineWidth = width * 3.2; ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.strokeStyle = FX.rgba(FX.mix(color, '#ffffff', 0.35), a); ctx.lineWidth = width; ctx.stroke();
+  }
+  function panel(x, y, w, h, color = C.neon) {   // a dark glass panel with a neon edge
+    FX.roundRect(ctx, x, y, w, h, 5);
+    ctx.fillStyle = 'rgba(10,8,24,.88)'; ctx.fill();
+    ctx.strokeStyle = FX.rgba(color, 0.75); ctx.lineWidth = 0.7; ctx.stroke();
+  }
+
+  // ----- pre-drawn glowing shapes (made once, reused every frame) -----
+  // The knight faces right; facing left is the same picture flipped.
+  function knightShape(p, frame, ghost) {
+    return FX.shape('bf-k' + p + frame + (ghost ? 'g' : ''), 14, 18, g => {
+      const col = PC[p], body = col, dark = ghost ? col : PC_DARK[p], steel = ghost ? col : '#dcd7f7', boot = ghost ? col : '#2b2550';
+      const legs = frame ? [3, 8.6] : [4.3, 7.4];  // walking: legs apart
+      g.fillStyle = dark; for (const lx of legs) g.fillRect(lx, 12.5, 2.4, 4);
+      g.fillStyle = boot; for (const lx of legs) { FX.roundRect(g, lx - 0.4, 16, 3.2, 2, 0.8); g.fill(); }
+      FX.roundRect(g, 3.4, 6.6, 7.2, 6.4, 1.6); g.fillStyle = body; g.fill();                 // armor
+      if (!ghost) {
+        g.fillStyle = FX.mix(col, '#ffffff', 0.4); g.fillRect(7.6, 7.6, 1.3, 3.8);          // shine
+        g.fillStyle = dark; g.fillRect(3.4, 7.2, 1.4, 4.8);                                  // shadow side
+        g.fillStyle = '#f4c542'; g.fillRect(3.4, 11.1, 7.2, 1.1);                            // belt
+      }
+      FX.roundRect(g, 4.2, 0.8, 5.8, 6.2, 2.2); g.fillStyle = steel; g.fill();               // helmet
+      if (!ghost) { g.fillStyle = '#0e0c1c'; g.fillRect(7, 3.1, 3, 1.1); }                  // visor slit
+      g.fillStyle = col; g.beginPath(); g.moveTo(4.6, 1.8); g.quadraticCurveTo(2.6, 0, 6.8, 0.2); g.quadraticCurveTo(5.2, 1, 4.6, 3); g.fill();   // plume
+    }, { color: PC[p], glow: ghost ? 4 : 2.5 });
+  }
+  const SH = {
+    heart: on => FX.shape('bf-heart' + on, 7, 6, g => {
+      g.beginPath(); g.moveTo(3.5, 5.8);
+      g.bezierCurveTo(-0.6, 3, 0.2, -0.5, 3.5, 1.5); g.bezierCurveTo(6.8, -0.5, 7.6, 3, 3.5, 5.8);
+      if (on) { g.fillStyle = '#ff4f6d'; g.fill(); g.fillStyle = '#ffb3c0'; g.fillRect(1.6, 1.6, 1.1, 1.1); }
+      else { g.strokeStyle = '#4a4380'; g.lineWidth = 0.7; g.stroke(); }
+    }, { color: '#ff4f6d', glow: on ? 3 : 0 }),
+    crown: () => FX.shape('bf-crown', 52, 10, g => {
+      g.fillStyle = '#f4c542'; g.beginPath(); g.moveTo(0, 10); g.lineTo(0, 7);
+      for (let i = 0; i < 5; i++) {                // 5 spikes on a band: tall, short, tall, short, tall
+        const x = 1 + i * 10.5, top = i % 2 ? 4.5 : 0.5;
+        g.lineTo(x, 7); g.lineTo(x + 1, top + 1.5); g.lineTo(x + 3, top); g.lineTo(x + 5, top + 1.5); g.lineTo(x + 6, 7);
+      }
+      g.lineTo(52, 7); g.lineTo(52, 10); g.closePath(); g.fill();
+      g.fillStyle = '#ff4f6d'; g.beginPath(); g.arc(25, 8.2, 1.4, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#4fd1e8'; g.beginPath(); g.arc(4, 8.2, 1.1, 0, Math.PI * 2); g.arc(46, 8.2, 1.1, 0, Math.PI * 2); g.fill();
+    }, { color: '#f4c542', glow: 4 }),
+    rock: () => FX.shape('bf-rock', 12, 9, g => {
+      g.fillStyle = '#6d6890'; g.beginPath(); g.moveTo(2, 2); g.lineTo(6, 0); g.lineTo(11, 2); g.lineTo(12, 6); g.lineTo(8, 9); g.lineTo(2, 8.5); g.lineTo(0, 5); g.closePath(); g.fill();
+      g.fillStyle = '#8f8ab0'; g.beginPath(); g.moveTo(2, 2.5); g.lineTo(6, 0.8); g.lineTo(8, 2.5); g.lineTo(4, 4.5); g.closePath(); g.fill();
+      g.strokeStyle = '#ff4f6d'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(4, 6); g.lineTo(7, 4.5); g.lineTo(9, 6.5); g.stroke();
+    }, { color: '#ff4f6d', glow: 3 }),
+    // the throne room, drawn once
+    bg: () => FX.shape('bf-bg', W, H, g => {
+      let gr = g.createLinearGradient(0, 0, 0, FLOOR);
+      gr.addColorStop(0, '#06050d'); gr.addColorStop(0.6, '#110c27'); gr.addColorStop(1, '#1b1239');
+      g.fillStyle = gr; g.fillRect(0, 0, W, FLOOR);
+      g.strokeStyle = 'rgba(180,92,255,.07)'; g.lineWidth = 0.5;              // stone bricks
+      for (let row = 0; row * 12 < FLOOR; row++) {
+        const y = row * 12 + 0.5, off = row % 2 ? 12 : 0;
+        g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke();
+        for (let x = -off; x < W; x += 24) { g.beginPath(); g.moveTo(x + 0.5, y); g.lineTo(x + 0.5, y + 12); g.stroke(); }
+      }
+      for (const cx of [62, 258]) {                // tall arched windows with stars
+        const path = () => { g.beginPath(); g.moveTo(cx - 15, 100); g.lineTo(cx - 15, 38); g.arc(cx, 38, 15, Math.PI, 0); g.lineTo(cx + 15, 100); g.closePath(); };
+        path(); gr = g.createLinearGradient(0, 23, 0, 100);
+        gr.addColorStop(0, '#0d1238'); gr.addColorStop(1, '#251247'); g.fillStyle = gr; g.fill();
+        g.fillStyle = 'rgba(241,236,255,.8)';
+        for (let i = 0; i < 9; i++) { const h = hash(cx * 31 + i); g.fillRect(cx - 13 + (h % 26), 26 + ((h >> 5) % 70), 0.7, 0.7); }
+        g.strokeStyle = 'rgba(180,92,255,.25)'; g.lineWidth = 0.6;
+        g.beginPath(); g.moveTo(cx, 23); g.lineTo(cx, 100); g.moveTo(cx - 15, 62); g.lineTo(cx + 15, 62); g.stroke();
+        path(); g.strokeStyle = 'rgba(180,92,255,.55)'; g.lineWidth = 1.2; g.stroke();
+        g.fillStyle = '#2b2550'; g.fillRect(cx - 18, 100, 36, 3);
+      }
+      g.strokeStyle = 'rgba(180,92,255,.13)'; g.lineWidth = 1.4;              // a big magic circle behind the boss
+      g.beginPath(); g.arc(160, 82, 62, 0, Math.PI * 2); g.stroke();
+      g.lineWidth = 0.6; g.beginPath(); g.arc(160, 82, 54, 0, Math.PI * 2); g.stroke();
+      for (let i = 0; i < 24; i++) {
+        const a = i / 24 * Math.PI * 2;
+        g.beginPath(); g.moveTo(160 + Math.cos(a) * 55, 82 + Math.sin(a) * 55); g.lineTo(160 + Math.cos(a) * (i % 2 ? 58 : 61), 82 + Math.sin(a) * (i % 2 ? 58 : 61)); g.stroke();
+      }
+      for (const x of [0, W - 12]) {               // pillars at the sides
+        gr = g.createLinearGradient(x, 0, x + 12, 0);
+        gr.addColorStop(0, '#1d1740'); gr.addColorStop(0.5, '#2a2258'); gr.addColorStop(1, '#151030');
+        g.fillStyle = gr; g.fillRect(x, 0, 12, FLOOR);
+        g.fillStyle = 'rgba(180,92,255,.35)'; g.fillRect(x === 0 ? 11.5 : x, 0, 0.5, FLOOR);
+      }
+      for (const tx of [40, 280]) {                // torch holders
+        g.fillStyle = '#3a3366'; g.fillRect(tx - 3.5, 71, 7, 2.5); g.fillRect(tx - 1, 73.5, 2, 7);
+        g.fillStyle = '#4a4380'; g.beginPath(); g.moveTo(tx - 4, 71); g.lineTo(tx + 4, 71); g.lineTo(tx + 2.5, 68); g.lineTo(tx - 2.5, 68); g.fill();
+      }
+      gr = g.createLinearGradient(0, FLOOR, 0, H);                            // shiny floor with a grid
+      gr.addColorStop(0, '#1e1644'); gr.addColorStop(1, '#09071a');
+      g.fillStyle = gr; g.fillRect(0, FLOOR, W, H - FLOOR);
+      g.strokeStyle = 'rgba(180,92,255,.16)'; g.lineWidth = 0.5;
+      for (let i = -12; i <= 12; i++) { g.beginPath(); g.moveTo(160 + i * 16, FLOOR); g.lineTo(160 + i * 34, H); g.stroke(); }
+      for (const y of [FLOOR + 3, FLOOR + 7, FLOOR + 12.5, FLOOR + 19.5]) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    }, { glow: 0 })
+  };
+
+  function drawRoom() {
+    FX.drawShape(ctx, SH.bg(), 0, 0, { ax: 0, ay: 0 });
+    const K = bossColors();
+    // the floor edge glows in the boss's color (red when it's angry)
+    if (!FX.low) { ctx.fillStyle = FX.rgba(K.edge, 0.2); ctx.fillRect(0, FLOOR - 1, W, 3); }
+    ctx.fillStyle = FX.rgba(K.edge, 0.8); ctx.fillRect(0, FLOOR - 0.25, W, 0.6);
+    // torches: flickering flame + warm light on the wall
+    for (const tx of [40, 280]) {
+      const f = Math.sin(FX.time * 13 + tx) * 0.5 + Math.sin(FX.time * 31 + tx * 2) * 0.3;
+      glow('#ff9f1c', tx, 62, 34 + f * 3, 0.16);
+      ctx.fillStyle = '#ff4f6d';
+      ctx.beginPath(); ctx.moveTo(tx - 3, 68); ctx.quadraticCurveTo(tx - 3.5, 61 - f, tx + f * 0.8, 56 - f * 2); ctx.quadraticCurveTo(tx + 3.5, 61, tx + 3, 68); ctx.fill();
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath(); ctx.moveTo(tx - 1.6, 68); ctx.quadraticCurveTo(tx - 1.8, 63, tx + f * 0.5, 60 - f); ctx.quadraticCurveTo(tx + 1.8, 63, tx + 1.6, 68); ctx.fill();
+      glow('#ffb347', tx, 63, 9 + f * 1.5, 0.9);
+    }
+    // scorch marks where the laser hit
+    for (const s of anim.scorch) {
+      const k = (FX.time - s.t0) / 1.6;
+      if (k >= 1) continue;
+      ctx.fillStyle = FX.rgba('#ff6a3d', 0.5 * (1 - k));
+      ctx.beginPath(); ctx.ellipse(s.x, FLOOR + 1, 10, 2, 0, 0, Math.PI * 2); ctx.fill();
+      glow('#ff4f6d', s.x, FLOOR, 12, 0.5 * (1 - k));
+    }
+  }
+
+  // ----- RED WARNING AREAS: the floor glows where an attack is about to land -----
+  function dangerZone(x0, x1, top, k) {
+    const pulse = 0.55 + 0.45 * Math.sin(FX.time * (10 + k * 14));
+    const g = ctx.createLinearGradient(0, top, 0, FLOOR);
+    g.addColorStop(0, 'rgba(255,79,109,0)'); g.addColorStop(1, FX.rgba(C.bad, (0.12 + 0.3 * k) * pulse + 0.05));
+    ctx.fillStyle = g; ctx.fillRect(x0, top, x1 - x0, FLOOR - top);
+    ctx.fillStyle = FX.rgba(C.bad, 0.5 + 0.5 * pulse); ctx.fillRect(x0, FLOOR - 1, x1 - x0, 1.6);
+    ctx.save(); ctx.beginPath(); ctx.rect(x0, FLOOR + 1, x1 - x0, 3); ctx.clip();   // hazard stripes on the floor
+    ctx.fillStyle = FX.rgba(C.bad, 0.35 + 0.3 * k);
+    const sh = (FX.time * 20) % 8;
+    for (let x = x0 - 8 + sh; x < x1; x += 8) { ctx.beginPath(); ctx.moveTo(x, FLOOR + 4); ctx.lineTo(x + 3, FLOOR + 1); ctx.lineTo(x + 6, FLOOR + 1); ctx.lineTo(x + 3, FLOOR + 4); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawWarnings() {
+    for (const r of rocks) {                       // rocks keep falling after the boss's move is over
+      if (r.t < 0) continue;
+      const u = r.t / CONFIG.rocks.warn, rx = 5 + u * 7, pulse = Math.floor(FX.time * 12) % 2;
+      ctx.fillStyle = FX.rgba(C.bad, 0.15 + 0.35 * u);
+      ctx.beginPath(); ctx.ellipse(r.x, FLOOR, rx, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = FX.rgba(pulse ? '#ffffff' : C.bad, 0.5 + 0.5 * u); ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.ellipse(r.x, FLOOR, 12, 2.6, 0, 0, Math.PI * 2); ctx.stroke();
+      glow(C.bad, r.x, FLOOR, 10 + u * 6, 0.25 + 0.4 * u);
+    }
+    const a = boss.act;
+    if (!a || S.state !== 'fight') return;
+    if (a.type === 'swipe' && a.t < a.warn) {
+      const k = a.t / a.warn;
+      if (a.side) dangerZone(214, W, FLOOR - 28, k); else dangerZone(0, 106, FLOOR - 28, k);
+    }
+    if ((a.type === 'stomp' || a.type === 'double') && a.t < a.warn) {
+      const k = a.t / a.warn, sides = a.type === 'double' ? [0, 1].filter(s => boss.legs[s].brokenT <= 0) : [a.side];
+      for (const s of sides) {
+        if (s) dangerZone(LEG_X[1] + LEG_W, W, FLOOR - 16, k); else dangerZone(0, LEG_X[0], FLOOR - 16, k);
+        ctx.fillStyle = FX.rgba(C.bad, 0.3 + 0.4 * k);                        // where the foot comes down
+        ctx.beginPath(); ctx.ellipse(LEG_X[s] + 13, FLOOR, 18, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    if (a.type === 'laser' && a.t < a.warn) {
+      const locked = a.t > a.warn * CONFIG.laser.lockAt, k = a.t / a.warn, w = CONFIG.laser.width;
+      dangerZone(a.aimX - w, a.aimX + w, FLOOR - (locked ? 60 : 36), locked ? 1 : k * 0.7);
+    }
+  }
+
+  function fistPos(s) {
+    const low = boss.lower * 48, a = boss.act;
+    let fx = s ? 232 : 88, fy = 116 + low + Math.sin(clock * 2 + s * 2) * 2;
+    if (boss.lower > 0.3) { fx = s ? 240 : 80; fy = FLOOR - 8; }
+    if (a && a.type === 'swipe' && a.side === s) {
+      if (a.t < a.warn) {                        // wind up: the arm goes up
+        const u = Math.min(1, a.t / (a.warn * 0.6));
+        fx = lerp(fx, s ? 258 : 62, u); fy = lerp(fy, 28, u);
+      } else { fx = a.fistX; fy = FLOOR - 9; }   // sweep along the floor
+    }
+    return [fx, fy];
+  }
+
+  // ----- THE STONE KING: dark stone with glowing cracks. Turns white for a moment when hit. -----
+  function drawBoss() {
+    const real = bossColors(), K = anim.hitT > 0 ? WHITE : real;
+    const dying = boss.dead && !anim.exploded;
+    const low = boss.lower * 48;
+    let ox = boss.staggerT > 0 ? Math.sin(FX.time * 60) * 1.2 : 0;
+    if (dying) ox = rand(-2, 2) * (0.4 + (FX.time - anim.deathAt) / CONFIG.looks.deathTime);
+    const asleep = S.state === 'title';
+    const hurt = 1 - boss.hp / CONFIG.boss.hp;    // 0 = full health, 1 = dead
+
+    if (boss.dead && anim.exploded) { drawRubble(real); return; }
+
+    // shadow and (when angry) a red aura
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.ellipse(160, FLOOR + 1, 74, 4, 0, 0, Math.PI * 2); ctx.fill();
+    if (boss.phase === 2 && !FX.low) glow(C.bad, 160, 90 + low, 95, 0.1 + 0.05 * Math.sin(FX.time * 4));
+
+    // ----- legs -----
+    for (const s of [0, 1]) {
+      const leg = boss.legs[s], x0 = LEG_X[s] + ox;
+      if (leg.brokenT > 0 || boss.lower > 0.3) { // crumbled stump
+        rr(x0 - 2, FLOOR - 12, LEG_W + 4, 12, 2, K.dark);
+        ctx.fillStyle = K.stone;
+        ctx.beginPath(); ctx.moveTo(x0, FLOOR - 12); ctx.lineTo(x0 + 4, FLOOR - 17); ctx.lineTo(x0 + 9, FLOOR - 13); ctx.lineTo(x0 + 14, FLOOR - 16); ctx.lineTo(x0 + 20, FLOOR - 12.5); ctx.lineTo(x0 + 25, FLOOR - 15); ctx.lineTo(x0 + 26, FLOOR - 12); ctx.fill();
+        neonLine([x0 + 6, FLOOR - 11, x0 + 10, FLOOR - 7, x0 + 15, FLOOR - 9, x0 + 19, FLOOR - 4], K.crack, 0.6, 0.6 + 0.4 * Math.sin(FX.time * 6));
+        continue;
+      }
+      const lift = leg.lift * 18, top = 118 + low, bottom = FLOOR - lift;
+      if (lift) { ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.ellipse(x0 + 13, FLOOR, 16 - lift * 0.3, 2, 0, 0, Math.PI * 2); ctx.fill(); }
+      rr(x0, top, LEG_W, bottom - top - 6, 3, K.stone); outline(K.edge, 0.4);
+      ctx.fillStyle = K.light; ctx.fillRect(s ? x0 + LEG_W - 5 : x0 + 1, top + 2, 4, bottom - top - 10);
+      rr(x0 + 3, top + (bottom - top) * 0.38, LEG_W - 6, 6, 2, K.dark);          // knee plate
+      rr(x0 - 4, bottom - 8, 34, 8, 2.5, K.dark); outline(K.edge, 0.5);         // foot
+      const cracks = Math.floor((1 - leg.hp / CONFIG.leg.hp) * 5);               // glowing cracks as it gets hurt
+      for (let i = 0; i < cracks; i++) {
+        const cy = top + 4 + i * ((bottom - top - 14) / 5), cx = x0 + 4 + (hash(i * 7 + s) % 12);
+        neonLine([cx, cy, cx + 4, cy + 3, cx + 2, cy + 6, cx + 7, cy + 8], K.crack, 0.6);
+      }
+      if (leg.flash > 0) { rr(x0, top, LEG_W, bottom - top, 3, 'rgba(255,255,255,.85)'); }
+    }
+
+    // ----- body -----
+    const ty = 62 + low;
+    rr(104 + ox, ty, 112, 60, 6, K.stone); outline(K.edge, 0.55, 0.8);
+    rr(108 + ox, ty + 1, 104, 5, 3, K.light);
+    rr(104 + ox, ty + 44, 112, 16, 5, K.dark);
+    ctx.fillStyle = K.dark; ctx.fillRect(116 + ox, ty + 10, 2, 30); ctx.fillRect(202 + ox, ty + 10, 2, 30);   // armor seams
+    const runeA = 0.35 + 0.65 * hurt;             // the cracks glow brighter as it gets weaker
+    neonLine([114 + ox, ty + 14, 124 + ox, ty + 16, 136 + ox, ty + 13], K.crack, 0.7, runeA);
+    neonLine([186 + ox, ty + 22, 196 + ox, ty + 20, 204 + ox, ty + 25], K.crack, 0.7, runeA);
+    neonLine([124 + ox, ty + 30, 127 + ox, ty + 36, 124 + ox, ty + 42], K.crack, 0.7, runeA);
+    if (hurt > 0.35) neonLine([180 + ox, ty + 34, 188 + ox, ty + 40, 196 + ox, ty + 38], K.crack, 0.7, runeA);
+    if (hurt > 0.6) neonLine([140 + ox, ty + 6, 146 + ox, ty + 12, 141 + ox, ty + 18], K.crack, 0.7, runeA);
+
+    // ----- core gem: glows, and blazes when the boss is down -----
+    const exposed = boss.lower > 0.9;
+    const gx = 160 + ox, gy = ty + 26;
+    const pulse = 0.5 + 0.5 * Math.sin(FX.time * (exposed ? 12 : 3));
+    ctx.fillStyle = K.dark; ctx.beginPath(); ctx.arc(gx, gy, 12, 0, Math.PI * 2); ctx.fill(); outline(K.edge, 0.6);
+    const gem = boss.coreFlash > 0 || anim.hitT > 0 ? '#ffffff' : FX.mix('#f4c542', '#fff3c4', exposed ? pulse : pulse * 0.4);
+    glow(C.ruler, gx, gy, exposed ? 30 + pulse * 8 : 16 + pulse * 4, exposed ? 0.9 : 0.5);
+    ctx.fillStyle = gem; ctx.beginPath(); ctx.moveTo(gx, gy - 9); ctx.lineTo(gx + 8, gy); ctx.lineTo(gx, gy + 9); ctx.lineTo(gx - 8, gy); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.moveTo(gx, gy - 9); ctx.lineTo(gx + 3, gy - 2); ctx.lineTo(gx - 3, gy - 2); ctx.closePath(); ctx.fill();
+    if (exposed) for (let i = 0; i < 8; i++) {   // sparkles circling the open core
+      const ang = i / 8 * Math.PI * 2 + FX.time * 2;
+      ctx.fillStyle = C.ruler; ctx.fillRect(gx + Math.cos(ang) * 17 - 1, gy + Math.sin(ang) * 17 - 1, 2, 2);
+      glow(C.ruler, gx + Math.cos(ang) * 17, gy + Math.sin(ang) * 17, 4, 0.6);
+    }
+
+    // ----- head with crown -----
+    const hy = 34 + low;
+    rr(134 + ox, hy, 52, 30, 5, K.stone); outline(K.edge, 0.55, 0.8);
+    rr(134 + ox, hy, 52, 4, 3, K.light);
+    rr(136 + ox, hy + 22, 48, 7, 3, K.dark);                                      // jaw
+    FX.drawShape(ctx, SH.crown(), 160 + ox, hy + 1, { ay: 1 });
+    const laserA = boss.act && boss.act.type === 'laser' ? boss.act : null;
+    for (const ex of [142, 168]) {
+      const cx = ex + 5 + ox, cy = hy + 12.5;
+      if (asleep) { ctx.fillStyle = K.dark; ctx.fillRect(ex + ox, hy + 12, 10, 1.2); }
+      else if (boss.staggerT > 0 || exposed || dying) {   // dizzy "x" eyes
+        neonLine([cx - 3, cy - 2.5, cx + 3, cy + 2.5], C.muted, 0.8); neonLine([cx - 3, cy + 2.5, cx + 3, cy - 2.5], C.muted, 0.8);
+      } else {
+        const charge = laserA ? Math.min(1, laserA.t / laserA.warn) : 0;
+        rr(ex + ox, hy + 10, 10, 5, 1.5, anim.hitT > 0 ? '#ffffff' : C.bad);
+        glow(C.bad, cx, cy, 8 + charge * 12, 0.7 + charge * 0.3);
+        if (charge > 0) { rr(ex + 3 + ox, hy + 11, 4, 3, 1, charge > 0.6 && Math.floor(FX.time * 16) % 2 ? '#ffffff' : C.ruler); glow('#ffffff', cx, cy, 4 + charge * 6, charge); }
+      }
+    }
+    neonLine([150 + ox, hy + 25, 156 + ox, hy + 24, 164 + ox, hy + 25.5, 170 + ox, hy + 24], K.crack, 0.6, 0.6);   // mouth
+    if (asleep) {                                 // sleeping: Zzz
+      for (let i = 0; i < 3; i++) {
+        const k = (FX.time * 0.5 + i / 3) % 1;
+        T('Z', 194 + Math.sin(FX.time * 2 + i) * 3 + k * 10, 46 - k * 22, C.muted, 6 + k * 4, { alpha: 1 - k, glow: 0 });
+      }
+    }
+    if (boss.staggerT > 0) for (let i = 0; i < 3; i++) {   // stunned: stars circling its head
+      const ang = FX.time * 5 + i * Math.PI * 2 / 3, sx = 160 + Math.cos(ang) * 30, sy = hy - 6 + Math.sin(ang) * 5;
+      sparkle(sx, sy, 3.2, C.ruler);
+    }
+
+    // ----- arms (drawn last, in front of the body) -----
+    for (const s of [0, 1]) {
+      const [fx, fy] = fistPos(s), sx = (s ? 222 : 98) + ox, sy = 70 + low;
+      const a = boss.act;
+      if (a && a.type === 'swipe' && a.side === s && a.t >= a.warn) {   // motion streak behind the sweeping fist
+        const back = s ? -1 : 1;
+        neonLine([fx + back * 40, FLOOR - 9, fx + back * 6, FLOOR - 9], C.bad, 4, 0.7);
+      }
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = K.dark; ctx.lineWidth = 14; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(fx, fy); ctx.stroke();
+      ctx.strokeStyle = K.stone; ctx.lineWidth = 10.5; ctx.stroke();
+      rr(fx - 9, fy - 8, 18, 16, 4, K.dark); outline(K.edge, 0.6);
+      rr(fx - 7.5, fy - 6.5, 15, 13, 3, K.stone);
+      ctx.fillStyle = K.dark; for (let i = 0; i < 3; i++) ctx.fillRect(fx - 6 + i * 4.5, fy - 2, 3, 1);   // knuckles
+      if (a && a.type === 'swipe' && a.side === s && a.t < a.warn) glow(C.bad, fx, fy, 14, 0.4 + 0.4 * Math.sin(FX.time * 20));
+    }
+  }
+
+  function sparkle(x, y, r, color) {             // a little 4-point star
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.3, y - r * 0.3); ctx.lineTo(x + r, y); ctx.lineTo(x + r * 0.3, y + r * 0.3);
+    ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.3, y + r * 0.3); ctx.lineTo(x - r, y); ctx.lineTo(x - r * 0.3, y - r * 0.3); ctx.closePath(); ctx.fill();
+    glow(color, x, y, r * 2.5, 0.6);
+  }
+  // after the big blast: a pile of glowing rubble and the cracked crown
+  function drawRubble(K) {
+    for (let i = 0; i < 18; i++) {                 // rough chunks of stone, bigger ones in the middle
+      const x = 108 + (hash(i) % 104), mid = 1 - Math.abs(x - 160) / 60, w = 6 + hash(i + 3) % 6 + mid * 6, h = 4 + hash(i + 9) % 4 + mid * 5;
+      const y = FLOOR - (i % 3 === 2 ? h * 0.8 : 0);
+      ctx.fillStyle = [K.light, K.stone, K.dark][i % 3];
+      ctx.beginPath(); ctx.moveTo(x - w / 2, y); ctx.lineTo(x - w / 2 + 1, y - h * 0.7); ctx.lineTo(x - w * 0.1, y - h); ctx.lineTo(x + w * 0.35, y - h * 0.8); ctx.lineTo(x + w / 2, y - h * 0.2); ctx.lineTo(x + w / 2, y); ctx.closePath(); ctx.fill();
+      outline(K.edge, 0.35, 0.5);
+    }
+    FX.drawShape(ctx, SH.crown(), 168, FLOOR - 3, { ay: 1, rot: 0.35, scale: 0.6 });
+    const k = Math.max(0, 1 - (FX.time - anim.explodedAt) / 3);
+    glow(C.ruler, 160, FLOOR - 8, 30, 0.5 * k);
+  }
+  function drawDebris() {
+    const K = bossColors(), cols = [K.light, K.stone, K.dark];
+    for (const d of anim.debris) {
+      ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.rot);
+      const s = d.s / 2;
+      ctx.fillStyle = cols[d.c];
+      ctx.beginPath(); ctx.moveTo(-s, -s * 0.6); ctx.lineTo(s * 0.2, -s); ctx.lineTo(s, -s * (d.shape % 2 ? 0.2 : 0.7)); ctx.lineTo(s * 0.8, s * 0.7); ctx.lineTo(-s * 0.6, s); ctx.closePath(); ctx.fill();
+      outline(K.edge, 0.5, 0.5);
+      ctx.restore();
+    }
+  }
+
+  // ----- the knights -----
+  const rollAngle = pl => pl.roll.t / CONFIG.dodge.time * Math.PI * 2 * pl.roll.dir;
+  function blade(x0, y0, x1, y1, color) {          // sword: glowing blade + gold crossguard
+    neonLine([x0, y0, x1, y1], color, 1.1);
+    const nx = -(y1 - y0), ny = x1 - x0, len = Math.hypot(nx, ny) || 1;
+    ctx.strokeStyle = '#f4c542'; ctx.lineWidth = 1.1; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x0 + nx / len * 2, y0 + ny / len * 2); ctx.lineTo(x0 - nx / len * 2, y0 - ny / len * 2); ctx.stroke();
+  }
+  function drawPlayer(pl) {
+    const x = pl.x, p = pl.p;
+    if (pl.down) {                                 // lying on the floor, with a countdown ring
+      ctx.save(); ctx.translate(x, FLOOR - 7); ctx.rotate(-Math.PI / 2 * pl.face);
+      FX.drawShape(ctx, knightShape(p, 0), 0, 0, { alpha: 0.6 });
+      ctx.restore();
+      if (S.state === 'fight') T('DOWN', x, FLOOR - 32, C.muted, 6, { glow: 0 });
+      if (!players[1 - p].down && S.state === 'fight') {
+        const k = pl.downT / CONFIG.player.reviveTime;
+        ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(x, FLOOR - 22, 6, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = PC[p]; ctx.beginPath(); ctx.arc(x, FLOOR - 22, 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - k)); ctx.stroke();
+        T(String(Math.ceil(pl.downT)), x, FLOOR - 21.5, C.ink, 6, { glow: 0 });
+      }
+      return;
+    }
+    if (pl.counterT > 0) glow(C.ruler, x, FLOOR - 9, 16 + Math.sin(FX.time * 10) * 2, 0.35);   // double-damage aura
+    if (pl.invulnT > 0 && !pl.roll && Math.floor(clock * 16) % 2) return;   // blink after a hit
+    if (pl.roll) {                                 // a somersault
+      ctx.save(); ctx.translate(x, FLOOR - 8); ctx.rotate(rollAngle(pl));
+      FX.drawShape(ctx, knightShape(p, 0), 0, 0, { scale: 0.85 });
+      ctx.restore();
+      return;
+    }
+    ctx.save();
+    ctx.translate(x, FLOOR);
+    if (pl.face < 0) ctx.scale(-1, 1);             // from here on: drawn facing right
+    const walking = pl.walkT > 0 && Math.floor(pl.walkT * 8) % 2;
+    FX.drawShape(ctx, knightShape(p, walking ? 1 : 0), 0, 0, { ax: 0.5, ay: 1 });
+    const col = pl.counterT > 0 ? C.ruler : '#eef0ff', hx = 4.5, hy = -8;   // hand
+    if (pl.blocking) {                             // shield; gold rim while a parry is possible
+      const parry = pl.blockPressT <= CONFIG.block.parryWindow;
+      rr(5.5, -15, 5, 12, 2, PC_DARK[p]);
+      FX.roundRect(ctx, 5.5, -15, 5, 12, 2);
+      ctx.strokeStyle = parry ? C.ruler : '#dcd7f7'; ctx.lineWidth = parry ? 1.2 : 0.8; ctx.stroke();
+      if (parry) glow(C.ruler, 8, -9, 10, 0.8);
+    } else if (pl.atk) {
+      const [a0, a1] = CONFIG.attack.active[pl.atk.n], t = pl.atk.t, big = pl.atk.n === 2;
+      const reach = CONFIG.attack.reach + (big ? 6 : 0), arcCol = big ? (pl.counterT > 0 ? C.ruler : PC[p]) : '#ffffff';
+      if (t < a0) blade(hx, hy, hx - 4, hy - 11, col);                       // wind up behind
+      else {
+        const u = clamp((t - a0) / (a1 - a0), 0, 1), fade = t <= a1 ? 1 : Math.max(0, 1 - (t - a1) / 0.12);
+        // the slash: a glowing crescent that sweeps from top to bottom
+        const A0 = -1.35, A1 = 0.75, cur = lerp(A0, A1, u), R = reach * 0.85;
+        if (fade > 0) {
+          ctx.lineCap = 'round';
+          for (let i = 0; i < 6; i++) {
+            const s0 = lerp(A0, cur, i / 6), s1 = lerp(A0, cur, (i + 1) / 6);
+            ctx.strokeStyle = FX.rgba(arcCol, fade * (0.15 + 0.75 * (i + 1) / 6)); ctx.lineWidth = (big ? 2.6 : 1.8) * (0.4 + (i + 1) / 6);
+            ctx.beginPath(); ctx.arc(2, hy, R, s0, s1); ctx.stroke();
+          }
+          if (!FX.low) glow(arcCol, 2 + Math.cos(cur) * R, hy + Math.sin(cur) * R, big ? 9 : 6, fade * 0.8);
+        }
+        if (t <= a1) blade(6, hy - 1, 6 + 14 + (big ? 6 : 0), hy - 1, col);   // blade forward
+        else blade(hx, hy, hx + 6, hy + 6.5, col);                             // follow through
+      }
+    } else blade(hx, hy, hx + 3, hy + 6, col);                                // sword held low
+    ctx.restore();
+    if (pl.counterT > 0 && Math.floor(FX.time * 8) % 2) T('x2', x, FLOOR - 26, C.ruler, 7);
+  }
+  function drawGhosts() {                          // dodge roll afterimages
+    for (const g of anim.ghosts) {
+      const k = (FX.time - g.t0) / 0.3;
+      ctx.save(); ctx.translate(g.x, FLOOR - 8); ctx.rotate(g.ang);
+      ctx.globalCompositeOperation = 'lighter';
+      FX.drawShape(ctx, knightShape(g.p, 0, true), 0, 0, { scale: 0.85, alpha: 0.65 * (1 - k) });
+      ctx.restore();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function drawAttacks() {
+    const a = boss.act;
+    // a bouncing "!" over the player the boss is about to hit
+    const mark = (pl, color) => {
+      if (pl.down) return;
+      const y = FLOOR - 36 - Math.abs(Math.sin(FX.time * 9)) * 3;
+      ctx.fillStyle = 'rgba(10,8,24,.8)'; ctx.beginPath(); ctx.moveTo(pl.x, y - 7); ctx.lineTo(pl.x + 6.5, y + 5); ctx.lineTo(pl.x - 6.5, y + 5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = color; ctx.lineWidth = 0.9; ctx.stroke();
+      T('!', pl.x, y + 1, color, 8);
+    };
+    if (a && a.t < a.warn && S.state === 'fight') {
+      if (a.type === 'double') players.forEach(pl => mark(pl, C.ruler));
+      else mark(players[a.side], a.type === 'laser' ? C.bad : C.ruler);
+    }
+    // eye laser: aim lines, then the beam
+    if (a && a.type === 'laser') {
+      const low = boss.lower * 48, eyes = [[147, 46 + low], [173, 46 + low]];
+      if (a.t < a.warn) {
+        const locked = a.t > a.warn * CONFIG.laser.lockAt;
+        if (!locked || Math.floor(FX.time * 20) % 2) for (const [ex, ey] of eyes) {
+          ctx.setLineDash([2, 2]); ctx.strokeStyle = FX.rgba(C.bad, locked ? 0.95 : 0.6); ctx.lineWidth = locked ? 0.8 : 0.5;
+          ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(a.aimX, FLOOR - 1); ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (a.t > a.warn * 0.4) T('NO BLOCK!', a.aimX, FLOOR - 66, C.bad, 7);
+      } else {
+        const fade = 1 - (a.t - a.warn) / CONFIG.laser.fire;
+        for (const [ex, ey] of eyes) {
+          if (!FX.low) { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = FX.rgba(C.bad, 0.4 * fade); ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(a.aimX, FLOOR - 2); ctx.stroke(); ctx.globalCompositeOperation = 'source-over'; }
+          ctx.strokeStyle = C.bad; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(a.aimX, FLOOR - 2); ctx.stroke();
+          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2; ctx.stroke();
+          glow(C.bad, ex, ey, 10, fade);
+        }
+        glow(C.ruler, a.aimX, FLOOR - 3, 22, fade);
+        ctx.fillStyle = C.ruler; ctx.fillRect(a.aimX - CONFIG.laser.width, FLOOR - 3, CONFIG.laser.width * 2, 3);
+      }
+    }
+    // stomp shockwaves: glowing energy waves sliding along the floor
+    const K = bossColors();
+    for (const w of waves) {
+      glow(K.edge, w.x, FLOOR - 5, 14, 0.7);
+      ctx.fillStyle = FX.rgba(K.edge, 0.85);
+      ctx.beginPath(); ctx.moveTo(w.x - w.dir * 10, FLOOR); ctx.quadraticCurveTo(w.x - w.dir * 2, FLOOR - 13, w.x + w.dir * 5, FLOOR); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      ctx.beginPath(); ctx.moveTo(w.x - w.dir * 4, FLOOR); ctx.quadraticCurveTo(w.x + w.dir * 1, FLOOR - 8, w.x + w.dir * 5, FLOOR); ctx.closePath(); ctx.fill();
+    }
+    // falling rocks drop in during the last moment
+    for (const r of rocks) {
+      if (r.t < 0) continue;
+      const u = r.t / CONFIG.rocks.warn;
+      if (u > 0.75) FX.drawShape(ctx, SH.rock(), r.x, lerp(-10, FLOOR - 5, (u - 0.75) / 0.25), { rot: r.x + u * 4 });
+    }
+  }
+
+  // ----- the bar on top: names + hearts, the boss's health -----
+  function drawHud() {
+    const g = ctx.createLinearGradient(0, 0, 0, 22);
+    g.addColorStop(0, 'rgba(10,8,24,.95)'); g.addColorStop(1, 'rgba(10,8,24,.7)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 22);
+    for (const pl of players) {
+      const right = pl.p === 1;
+      T(NAMES[pl.p], right ? W - 6 : 6, 7.5, PC[pl.p], 8, { align: right ? 'right' : 'left' });
+      for (let i = 0; i < CONFIG.player.hearts; i++) {
+        FX.drawShape(ctx, SH.heart(i < pl.hp), right ? W - 9.5 - i * 8.5 : 9.5 + i * 8.5, 16.5);
+      }
+      if (pl.counterT > 0) T('x2', right ? W - 56 : 56, 16.5, C.ruler, 6);
+    }
+    const K = bossColors(), angry = boss.phase === 2;
+    T('STONE KING', W / 2, 6, angry ? C.bad : C.ink, 6.5, angry ? {} : { glow: 0 });
+    const bx = 98, bw = 124, by = 11, bh = 5;
+    if (angry && !FX.low) glow(C.bad, W / 2, by + 2.5, 70, 0.08 + 0.05 * Math.sin(FX.time * 5));
+    FX.roundRect(ctx, bx, by, bw, bh, 2); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
+    ctx.save(); FX.roundRect(ctx, bx, by, bw, bh, 2); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillRect(bx, by, bw * anim.hpTrail / CONFIG.boss.hp, bh);   // health just lost
+    const hg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    if (angry) { hg.addColorStop(0, '#ff4f6d'); hg.addColorStop(1, '#ff9f1c'); } else { hg.addColorStop(0, '#b45cff'); hg.addColorStop(1, '#ff4fd8'); }
+    ctx.fillStyle = anim.hitT > 0 ? '#ffffff' : hg; ctx.fillRect(bx, by, bw * Math.max(0, boss.hp) / CONFIG.boss.hp, bh);
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(bx, by, bw, 1.2);
+    ctx.restore();
+    FX.roundRect(ctx, bx, by, bw, bh, 2); outline(K.edge, 0.8);
+    ctx.fillStyle = C.ruler; ctx.fillRect(bx + bw * CONFIG.boss.angryAt - 0.4, by - 1, 0.8, bh + 2);   // "gets angry" mark
+
+    // leg health under each leg (in the color of the player who has to break it)
+    if (!boss.dead) for (const s of [0, 1]) {
+      const leg = boss.legs[s], x = LEG_X[s];
+      rr(x, FLOOR + 6, LEG_W, 3, 1.2, 'rgba(0,0,0,.6)');
+      if (leg.brokenT > 0) {
+        rr(x, FLOOR + 6, Math.max(1, LEG_W * leg.brokenT / CONFIG.leg.brokenTime), 3, 1.2, C.ruler);
+        if (boss.collapseT <= 0) T('BROKEN', x + LEG_W / 2, FLOOR + 14, C.ruler, 5.5);
+      } else if (leg.hp > 0) rr(x, FLOOR + 6, Math.max(1, LEG_W * leg.hp / CONFIG.leg.hp), 3, 1.2, PC[s]);
+    }
+    if (boss.collapseT > 0 && !boss.dead) {      // time left to hit the core
+      rr(120, FLOOR + 12, 80, 3, 1.2, 'rgba(0,0,0,.6)');
+      rr(120, FLOOR + 12, Math.max(1, 80 * boss.collapseT / CONFIG.collapse.time), 3, 1.2, C.ruler);
+      glow(C.ruler, 160, FLOOR + 13.5, 24, 0.3);
+    }
+    // messages pop in under the bar
+    if (S.msg && S.msg.t < 2.5 && S.state === 'fight') {
+      const k = S.msg.t, sc = Math.max(0.01, FX.ease.outBack(Math.min(1, k / 0.25))), alpha = k > 2.1 ? (2.5 - k) / 0.4 : 1;
+      const tw = FX.textSprite(S.msg.s, { size: 8, color: S.msg.color }).w;
+      ctx.globalAlpha = alpha;
+      panel(W / 2 - tw / 2 - 8, 25, tw + 16, 13, S.msg.color);
+      ctx.globalAlpha = 1;
+      T(S.msg.s, W / 2, 31.5, S.msg.color, 8, { scale: sc, alpha });
+    }
+  }
+
+  function readyPlates(y) {
+    for (const p of [0, 1]) {
+      const cx = p ? 272 : 48;
+      const pop = S.ready[p] ? Math.max(0.01, FX.ease.outBack(Math.min(1, (FX.time - anim.readyAt[p]) / 0.3))) : 1;
+      panel(cx - 34, y, 68, 16, PC[p]);
+      T(S.ready[p] ? 'READY!' : pressText(p), cx, y + 8, S.ready[p] ? PC[p] : C.ink, 8, { scale: pop });
+    }
+  }
+  const fmtTime = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+
+  function drawScreens() {
+    if (S.state === 'title') {
+      panel(64, 40, 192, 64);
+      const bob = Math.sin(FX.time * 2.5) * 1.2;
+      T('BOSS', W / 2 - 4, 58 + bob, C.p1, 18, { align: 'right' });
+      T('FIGHT', W / 2 + 4, 58 - bob, C.p2, 18, { align: 'left' });
+      T('BREAK BOTH LEGS AT ONCE', W / 2, 79, C.muted, 7, { glow: 0 });
+      T('THEN SMASH THE CORE', W / 2, 90, C.muted, 7, { glow: 0 });
+      readyPlates(114);
+    } else if (S.state === 'win') {
+      if (!anim.exploded || FX.time - anim.explodedAt < 0.7) return;   // first let the boss blow up
+      const enter = Math.min(1, (FX.time - anim.explodedAt - 0.7) / 0.9);
+      panel(36, 30, 248, 80, C.ruler);
+      const y = FX.lerp(10, 46, FX.ease.outBounce(enter)) - (enter >= 1 ? Math.abs(Math.sin(FX.time * 3.2)) * 2.5 : 0);
+      T('VICTORY!', W / 2, y, C.ruler, 18);
+      T('STONE KING DEFEATED IN ' + fmtTime(S.time), W / 2, 64, C.ink, 7, { glow: 0 });
+      players.forEach((pl, i) => {
+        T(NAMES[i], 50, 78 + i * 11, PC[i], 8, { align: 'left' });
+        T(Math.round(pl.stats.dmg) + ' DMG  ·  ' + pl.stats.parries + ' PARRY', 270, 78 + i * 11, C.ink, 7, { align: 'right', glow: 0 });
+      });
+      T(CPU ? 'PRESS ' + ATTACK_LABEL[0] + ' TO PLAY AGAIN' : 'BOTH PRESS ATTACK', W / 2, 102, C.muted, 6, { glow: 0 });
+      readyPlates(114);
+    } else if (S.state === 'lose') {
+      const g = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, 200);   // dark red edges
+      g.addColorStop(0, 'rgba(60,0,15,0)'); g.addColorStop(1, 'rgba(60,0,15,.6)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      const k = Math.max(0.01, FX.ease.outBack(Math.min(1, S.t / 0.4)));
+      panel(64, 50, 192, 46, C.bad);
+      T('DEFEATED...', W / 2, 66, C.bad, 16, { scale: k });
+      T(CPU ? 'PRESS ' + ATTACK_LABEL[0] + ' TO RETRY' : 'BOTH PRESS ATTACK TO RETRY', W / 2, 85, C.muted, 7, { glow: 0 });
+      readyPlates(114);
+    }
+  }
+
+  function draw() {
+    st.begin();
+    drawRoom();
+    drawWarnings();
+    drawBoss();
+    drawDebris();
+    drawGhosts();
+    players.forEach(drawPlayer);
+    drawAttacks();
+    FX.draw(ctx);                                  // sparks, explosions, confetti and damage numbers
+    st.steady();                                   // the health bars and panels don't shake
+    drawHud();
+    drawScreens();
+    if (!focused) {
+      ctx.fillStyle = 'rgba(7,6,15,.8)'; ctx.fillRect(0, 22, W, H - 22);
+      T('CLICK HERE TO PLAY', W / 2, 96, C.ink, 11);
+      T('SO THE KEYBOARD GOES TO THE GAME', W / 2, 110, C.muted, 7, { glow: 0 });
+    }
+    st.end();
+  }
+
+  // ---------- Game loop: fixed 1/120 s steps, paused while the page doesn't have the keyboard ----------
+  let last = null, acc = 0;
+  function loop(ts) {
+    const dt = last == null ? 0 : Math.min(0.1, (ts - last) / 1000);
+    last = ts;
+    if (focused) {
+      acc += dt;
+      while (acc >= STEP) { update(STEP); acc -= STEP; }
+      FX.update(dt);
+      updateLooks(dt);
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>

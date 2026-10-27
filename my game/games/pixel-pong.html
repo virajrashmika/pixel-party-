@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pixel Pong - Pixel Party</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+/* Same layout as Reflex Duel: one big neon arcade screen on top, two player panels below.
+   Shared colors, fonts, buttons and kbd come from css/style.css; only game-specific styles are here. */
+.wrap{max-width:1600px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+.screen{display:grid;place-items:center}
+canvas{
+  display:block;cursor:pointer;border-radius:14px;background:#07060f;
+  box-shadow:0 0 0 1px var(--edge),0 18px 50px rgba(0,0,0,.55),0 0 40px rgba(255,79,216,.12)
+}
+.low-fx canvas{box-shadow:0 0 0 1px var(--edge)}
+.players{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:1040px;width:100%;margin:0 auto}
+.player{
+  --c:var(--p1);--glow:rgba(255,122,89,.35);
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01)),var(--panel);
+  border:1px solid var(--edge);border-radius:16px;padding:16px 18px;display:grid;gap:12px;min-width:0
+}
+.player.two{--c:var(--p2);--glow:rgba(79,209,232,.35)}
+.player h2{font-family:var(--font-title);font-weight:400;font-size:18px;letter-spacing:.06em;margin:0;color:var(--c)}
+.player h2 span{color:var(--muted);font-family:var(--font-ui);font-weight:700;font-size:14px;letter-spacing:.12em}
+.player h2 .pname{color:inherit;font-family:var(--font-title);font-weight:400;font-size:18px;letter-spacing:.06em;text-shadow:0 0 12px var(--glow)}
+.keys{display:flex;flex-wrap:wrap;align-items:center;gap:10px;color:var(--muted)}
+.taps{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tap{
+  font-family:var(--font-title);font-size:15px;letter-spacing:.1em;padding:16px;border:0;border-radius:12px;cursor:pointer;
+  color:#07060f;background:var(--c);box-shadow:0 0 22px var(--glow);
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:transform .08s
+}
+.tap:active{transform:translateY(2px) scale(.99)}
+.low-fx .tap{box-shadow:none}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px 28px;max-width:1040px;width:100%;margin:0 auto}
+.notes h3{font-family:var(--font-title);font-weight:400;font-size:15px;letter-spacing:.08em;color:var(--ruler);margin:0 0 8px}
+.notes p{margin:0;color:var(--muted);max-width:60ch}
+.notes b{color:var(--ink);font-weight:700}
+.cpu-note{margin:0;color:var(--muted)}
+.cpu-note b{color:var(--c);font-weight:700}
+@media (prefers-reduced-motion:reduce){.tap:active{transform:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="a">PIXEL</span> <span class="b">PONG</span></h1>
+      <p class="tag">Two players, one keyboard. First to 5 points wins.</p>
+    </div>
+    <div class="actions">
+      <a class="btn" id="back" href="../index.html">BACK TO MENU (ESC)</a>
+      <button class="btn" id="sound" type="button" aria-pressed="true">SOUND ON</button>
+    </div>
+  </header>
+
+  <div class="screen">
+    <canvas id="screen" tabindex="0" aria-label="Pixel Pong game screen. Click to give the game the keyboard."></canvas>
+  </div>
+
+  <div class="players">
+    <section class="player one">
+      <h2><span class="pname" id="pname1">PLAYER 1</span> <span>· LEFT HAND</span></h2>
+      <div class="keys"><kbd>W</kbd> up <kbd>S</kbd> down</div>
+      <div class="taps">
+        <button class="tap" type="button" data-p="0" data-dir="0">HOLD UP</button>
+        <button class="tap" type="button" data-p="0" data-dir="1">HOLD DOWN</button>
+      </div>
+    </section>
+    <section class="player two">
+      <h2><span class="pname" id="pname2">PLAYER 2</span> <span>· RIGHT HAND</span></h2>
+      <div class="keys"><kbd>&uarr;</kbd> up <kbd>&darr;</kbd> down</div>
+      <div class="taps">
+        <button class="tap" type="button" data-p="1" data-dir="0">HOLD UP</button>
+        <button class="tap" type="button" data-p="1" data-dir="1">HOLD DOWN</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>HOW TO PLAY</h3>
+      <p>Both players press one of their keys to get ready. Move your paddle to hit the ball back. Miss it and your rival scores. <b>Every hit makes the ball a little faster.</b></p>
+    </div>
+    <div>
+      <h3>AIM WITH YOUR PADDLE</h3>
+      <p>Where the ball hits your paddle decides where it goes. The <b>middle</b> sends it straight back, the <b>edges</b> send it off at a steep angle: a <b>power hit</b>.</p>
+    </div>
+    <div>
+      <h3>KEYBOARD TIP</h3>
+      <p>If one player's keys stop working while the other holds theirs, the keyboard is "ghosting". Player 2 can switch from the arrows to <b>Num 8</b> and <b>Num 5</b>.</p>
+    </div>
+  </div>
+</div>
+
+<script src="../js/players.js"></script>
+<script src="../js/fx.js"></script>
+<script>
+(() => {
+  // The game still thinks in a 320 x 180 screen; js/fx.js draws it sharp at full resolution.
+  const W = 320, H = 180;
+  const cvs = document.getElementById('screen');
+  const header = document.querySelector('header');
+  const st = FX.stage(cvs, { width: W, height: H, margin: () => header.offsetHeight + 64 });
+  const ctx = st.ctx;
+
+  const css = getComputedStyle(document.documentElement);
+  const C = {};
+  ['screen','line','ink','muted','bad','p1','p2','ruler','neon','pink']
+    .forEach(k => C[k] = css.getPropertyValue('--' + k).trim());
+  const PC = [C.p1, C.p2];
+
+  // ---------- Player names: come from the page address, e.g. ?p1=VIRAJ&p2=KASUN ----------
+  const fromURL = Players.fromURL();
+  const NAMES = fromURL || Players.DEFAULTS.slice();   // opened directly: P1 / P2
+  document.getElementById('pname1').textContent = NAMES[0];
+  document.getElementById('pname2').textContent = NAMES[1];
+
+  // Back to menu keeps the names, so the menu opens straight on the game tiles
+  const backLink = document.getElementById('back');
+  if (fromURL) backLink.href = '../index.html' + Players.toQuery(NAMES, Players.cpuFromURL());
+
+  // ---------- Controls: left half vs right half of the keyboard ----------
+  // KEYS[player][0] = up keys, KEYS[player][1] = down keys
+  const KEYS = [
+    [['KeyW'], ['KeyS']],
+    [['ArrowUp', 'Numpad8'], ['ArrowDown', 'Numpad5']]
+  ];
+  const KEY_LABEL = ['W', 'UP'];
+  const MOVE_LABEL = ['MOVE W/S', 'MOVE UP/DOWN'];
+
+  // ---------- 1 player mode: player 2 is the computer (CPU) ----------
+  // The level comes from the page address (?cpu=normal); null = two people are playing.
+  const CPU = Players.cpuFromURL();
+  const CPU_LEVELS = {
+    // speed: how fast the CPU paddle moves (1 = as fast as yours)
+    // react: how long (s) it takes to notice the ball is coming its way
+    // miss: how far off (screen units) its guess of where the ball arrives can be.
+    //       More than 16 (half the paddle + half the ball) and it can miss completely.
+    easy:   { speed: 0.55, react: 0.35, miss: 26 },
+    normal: { speed: 0.75, react: 0.22, miss: 20 },
+    hard:   { speed: 0.95, react: 0.12, miss: 17 }
+  };
+  const cpu = { coming: false, seeAt: 0, err: 0, readyAt: null };   // what the CPU knows and plans
+  if (CPU) {
+    const level = CPU.toUpperCase();
+    document.querySelector('header .tag').textContent = 'You against the CPU (' + level + '). First to 5 points wins.';
+    const two = document.querySelector('.player.two');
+    two.querySelector('.keys').outerHTML = '<p class="cpu-note">Played by the computer. Level: <b>' + level + '</b>. Change it on the menu.</p>';
+    two.querySelector('.taps').hidden = true;
+    two.querySelector('h2 span:last-child').textContent = '· COMPUTER';
+    // playing alone, the arrow keys move your paddle too
+    KEYS[0] = [['KeyW', ...KEYS[1][0]], ['KeyS', ...KEYS[1][1]]];
+    document.querySelector('.player.one .keys').innerHTML = '<kbd>W</kbd> / <kbd>&uarr;</kbd> up <kbd>S</kbd> / <kbd>&darr;</kbd> down';
+    MOVE_LABEL[1] = 'CPU ' + level;
+  }
+  // what the plate under player 2's paddle says while waiting for a press
+  const pressText = p => (CPU && p === 1 ? 'WAITING' : 'PRESS ' + KEY_LABEL[p]);
+
+  // ---------- Rules and timing ----------
+  const WIN_SCORE = 5;
+  const SERVE_DELAY = 1.0, POINT_HOLD = 1.4;     // seconds
+
+  // ---------- Playing field (screen units) ----------
+  const TOP = 23, BOTTOM = 178;                  // ball and paddles stay between these
+  const PAD_W = 4, PAD_H = 28, PAD_X = [10, W - 10 - PAD_W];
+  const PAD_SPEED = 150;                         // units per second
+  const BALL = 4;
+  const BALL_START = 140, BALL_STEP = 10, BALL_MAX = 260;   // units per second
+  const MAX_ANGLE = 55 * Math.PI / 180;          // steepest bounce off a paddle edge
+
+  // ---------- Game state ----------
+  const S = {
+    state: 'title', ready: [false, false], score: [0, 0], hits: [0, 0],
+    pad: [0, 0], ball: null, speed: BALL_START, rally: 0,
+    clock: 0, stateAt: 0, serveTo: 0, lastPoint: -1, matchWinner: -1
+  };
+  const held = [[false, false], [false, false]];  // held[player][0=up, 1=down]
+  const centerPads = () => { S.pad = [0, 1].map(() => Math.round((TOP + BOTTOM - PAD_H) / 2)); };
+  centerPads();
+
+  function newMatch() {
+    S.score = [0, 0]; S.hits = [0, 0]; S.matchWinner = -1; S.ready = [false, false];
+    centerPads();
+    serve(Math.random() < 0.5 ? 0 : 1);
+  }
+  // Ball waits in the middle, then flies toward player `to`
+  function serve(to) {
+    S.state = 'serve'; S.stateAt = S.clock; S.serveTo = to; S.rally = 0;
+    S.ball = { x: W / 2 - BALL / 2, y: (TOP + BOTTOM - BALL) / 2, vx: 0, vy: 0, owner: -1 };
+  }
+  function launch() {
+    S.state = 'play'; S.speed = BALL_START;
+    const angle = (Math.random() * 2 - 1) * 25 * Math.PI / 180;
+    const dir = S.serveTo === 0 ? -1 : 1;
+    S.ball.vx = dir * S.speed * Math.cos(angle);
+    S.ball.vy = S.speed * Math.sin(angle);
+    sfx.serve();
+    effects.launch();
+  }
+  function point(p) {
+    S.score[p]++; S.lastPoint = p;
+    S.state = 'point'; S.stateAt = S.clock;
+    if (S.score[p] >= WIN_SCORE) { S.matchWinner = p; sfx.win(); }
+    else sfx.point();
+    effects.goal(p);
+  }
+
+  // Both players press a key to start (same as Reflex Duel)
+  function press(p) {
+    if (S.state !== 'title' && S.state !== 'over') return;
+    if (!S.ready[p]) { S.ready[p] = true; sfx.ready(p); effects.ready(p); }
+    if (S.ready[0] && S.ready[1]) newMatch();
+  }
+
+  // Where will the ball's middle be when it reaches the CPU paddle? Follows the wall bounces.
+  function predictY() {
+    const b = S.ball;
+    const t = (PAD_X[1] - BALL - b.x) / b.vx;
+    const span = BOTTOM - BALL - TOP;
+    let y = (b.y + b.vy * t - TOP) % (2 * span);
+    if (y < 0) y += 2 * span;
+    if (y > span) y = 2 * span - y;              // folded back = bounced off a wall
+    return TOP + y + BALL / 2;
+  }
+  // The CPU moves its paddle itself instead of holding keys, so it can be slower than you.
+  function cpuThink(dt) {
+    const L = CPU_LEVELS[CPU];
+    if ((S.state === 'title' || S.state === 'over') && S.ready[0] && !S.ready[1]) {
+      if (cpu.readyAt == null) cpu.readyAt = S.clock + 0.4;   // gets ready a moment after you
+      if (S.clock >= cpu.readyAt) { cpu.readyAt = null; press(1); }
+    }
+    const coming = S.state === 'play' && S.ball.vx > 0;
+    if (coming && !cpu.coming) {                 // ball just turned its way: pick this shot's mistake
+      cpu.seeAt = S.clock + L.react;
+      cpu.err = (Math.random() * 2 - 1) * L.miss;
+    }
+    cpu.coming = coming;
+    if (coming && S.clock < cpu.seeAt) return;   // hasn't noticed yet: stays where it is
+    const target = coming ? predictY() + cpu.err : (TOP + BOTTOM) / 2;   // nothing to do: wait in the middle
+    const step = PAD_SPEED * L.speed * dt;
+    const move = Math.max(-step, Math.min(step, target - (S.pad[1] + PAD_H / 2)));
+    S.pad[1] = Math.max(TOP, Math.min(BOTTOM - PAD_H, S.pad[1] + move));
+  }
+
+  // ---------- One small step of the game (runs 120 times per second) ----------
+  const STEP = 1 / 120;
+  function update(dt) {
+    S.clock += dt;
+
+    // paddles move while a key is held (also during serve and title)
+    for (let p = 0; p < 2; p++) {
+      if (CPU && p === 1) { cpuThink(dt); continue; }
+      const dir = (held[p][1] ? 1 : 0) - (held[p][0] ? 1 : 0);
+      S.pad[p] = Math.max(TOP, Math.min(BOTTOM - PAD_H, S.pad[p] + dir * PAD_SPEED * dt));
+    }
+
+    if (S.state === 'serve' && S.clock - S.stateAt >= SERVE_DELAY) launch();
+    if (S.state === 'point' && S.clock - S.stateAt >= POINT_HOLD) {
+      if (S.matchWinner >= 0) { S.state = 'over'; S.ready = [false, false]; S.ball = null; effects.over(); }
+      else serve(1 - S.lastPoint);              // ball goes toward whoever just lost the point
+    }
+    if (S.state !== 'play') return;
+
+    const b = S.ball;
+    const prevX = b.x;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+
+    // bounce off the top and bottom walls
+    if (b.y < TOP) { b.y = TOP; b.vy = Math.abs(b.vy); sfx.wall(); effects.wall(); }
+    if (b.y + BALL > BOTTOM) { b.y = BOTTOM - BALL; b.vy = -Math.abs(b.vy); sfx.wall(); effects.wall(); }
+
+    // bounce off a paddle: only if the ball crossed the paddle's front edge in this step
+    for (let p = 0; p < 2; p++) {
+      const front = p === 0 ? PAD_X[0] + PAD_W : PAD_X[1];
+      const crossed = p === 0 ? (prevX >= front && b.x < front) : (prevX + BALL <= front && b.x + BALL > front);
+      const overlapsY = b.y + BALL > S.pad[p] && b.y < S.pad[p] + PAD_H;
+      if (crossed && overlapsY) hit(p);
+    }
+
+    // ball left the screen: the other player scores
+    if (b.x + BALL < 0) point(1);
+    else if (b.x > W) point(0);
+  }
+
+  function hit(p) {
+    const b = S.ball;
+    S.rally++; S.hits[p]++; b.owner = p;
+    S.speed = Math.min(BALL_MAX, S.speed + BALL_STEP);
+    // -1 = top edge of the paddle, 0 = middle, +1 = bottom edge
+    const offset = ((b.y + BALL / 2) - (S.pad[p] + PAD_H / 2)) / (PAD_H / 2 + BALL / 2);
+    const angle = Math.max(-1, Math.min(1, offset)) * MAX_ANGLE;
+    const dir = p === 0 ? 1 : -1;
+    b.vx = dir * S.speed * Math.cos(angle);
+    b.vy = S.speed * Math.sin(angle);
+    b.x = p === 0 ? PAD_X[0] + PAD_W : PAD_X[1] - BALL;
+    sfx.hit(p);
+    effects.hit(p, offset);
+  }
+
+  // ---------- Input ----------
+  function findKey(code) {
+    for (let p = 0; p < 2; p++) for (let d = 0; d < 2; d++) if (KEYS[p][d].includes(code)) return [p, d];
+    return null;
+  }
+  addEventListener('keydown', e => {
+    if (e.code === 'Escape') { location.href = backLink.href; return; }
+    const k = findKey(e.code);
+    if (!k || (CPU && k[0] === 1)) return;       // 1 player mode: the CPU moves player 2
+    e.preventDefault();                         // stop arrow keys scrolling the page
+    held[k[0]][k[1]] = true;
+    if (e.repeat) return;
+    unlockAudio();
+    press(k[0]);
+  });
+  addEventListener('keyup', e => {
+    const k = findKey(e.code);
+    if (k) held[k[0]][k[1]] = false;
+  });
+  // Touch / mouse: HOLD UP and HOLD DOWN buttons
+  document.querySelectorAll('.tap').forEach(btn => {
+    const p = +btn.dataset.p, d = +btn.dataset.dir;
+    btn.addEventListener('pointerdown', e => {
+      e.preventDefault(); unlockAudio();
+      held[p][d] = true; press(p);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(type =>
+      btn.addEventListener(type, () => { held[p][d] = false; }));
+    btn.addEventListener('contextmenu', e => e.preventDefault());   // no long-press menu on phones
+  });
+  let focused = document.hasFocus();
+  const releaseAll = () => held.forEach(h => { h[0] = h[1] = false; });
+  addEventListener('focus', () => focused = true);
+  addEventListener('blur', () => { focused = false; releaseAll(); });
+  cvs.addEventListener('pointerdown', () => { cvs.focus(); focused = true; unlockAudio(); });
+
+  // ---------- Sound (tiny square-wave blips, same as Reflex Duel) ----------
+  let ac = null, muted = false;
+  function unlockAudio() {
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; } }
+    if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+  }
+  function tone(f, dur, type = 'square', vol = 0.05, slide = 0, delay = 0) {
+    if (!ac || muted) return;
+    const t0 = ac.currentTime + delay;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (slide) o.frequency.linearRampToValueAtTime(Math.max(40, f + slide), t0 + dur);
+    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    ready: p => tone(p ? 660 : 520, 0.08),
+    serve: () => tone(880, 0.06, 'square', 0.03),
+    hit: p => tone(p ? 990 : 780, 0.05, 'square', 0.06),
+    wall: () => tone(330, 0.04, 'square', 0.04),
+    point: () => { tone(660, 0.08); tone(990, 0.12, 'square', 0.05, 0, 0.09); },
+    win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.13, 'square', 0.05, 0, i * 0.11))
+  };
+  const soundBtn = document.getElementById('sound');
+  soundBtn.addEventListener('click', () => {
+    muted = !muted; unlockAudio();
+    soundBtn.textContent = muted ? 'SOUND OFF' : 'SOUND ON';
+    soundBtn.setAttribute('aria-pressed', String(!muted));
+  });
+
+  // =====================================================================
+  // EFFECTS: only looks, they never change the game
+  // =====================================================================
+  const now = () => performance.now();
+  const anim = { padHitAt: [-9e9, -9e9], power: [false, false], pipAt: [-9e9, -9e9], readyAt: [-9e9, -9e9],
+                 overAt: 0, confettiAt: 0, pointAt: 0, rallyAt: 0, trail: [] };
+  const ballColor = () => (S.ball && S.ball.owner >= 0 ? PC[S.ball.owner] : C.ink);
+  const effects = {
+    ready(p) { anim.readyAt[p] = now(); FX.sparks(p ? 240 : 80, 150, { color: PC[p], count: 10, speed: 60, gravity: 30 }); },
+    launch() { anim.trail.length = 0; FX.sparks(W / 2, (TOP + BOTTOM) / 2, { color: C.ink, count: 8, speed: 50, gravity: 0 }); },
+    hit(p, offset) {
+      // power hit = off the paddle's edge (steep shot) or when the ball is near top speed
+      const power = Math.abs(offset) >= 0.6 || S.speed >= BALL_MAX - 20;
+      anim.padHitAt[p] = now(); anim.power[p] = power; anim.rallyAt = now();
+      const b = S.ball, x = p === 0 ? PAD_X[0] + PAD_W : PAD_X[1], y = b.y + BALL / 2;
+      const away = p === 0 ? 0 : Math.PI;
+      FX.sparks(x, y, { color: PC[p], count: power ? 26 : 9, speed: power ? 170 : 80, angle: away, spread: power ? 2.2 : 1.4, gravity: 40 });
+      if (power) {
+        FX.sparks(x, y, { color: C.ruler, count: 12, speed: 140, angle: away, spread: 1.6, gravity: 40 });
+        FX.shake(0.25);
+        FX.text('POWER!', p === 0 ? 46 : W - 46, y < 60 ? y + 16 : y - 14, { color: C.ruler, size: 11, life: 0.7, rise: 10 });
+      }
+    },
+    wall() {
+      const b = S.ball;
+      FX.sparks(b.x + BALL / 2, b.y < 100 ? TOP : BOTTOM, { color: C.pink, count: 4, speed: 50, angle: b.y < 100 ? Math.PI / 2 : -Math.PI / 2, spread: 2, gravity: 0 });
+    },
+    goal(p) {                                       // explosion where the ball left, shake, flash
+      const b = S.ball, x = b.x < W / 2 ? 2 : W - 2, y = FX.clamp(b.y + BALL / 2, TOP + 6, BOTTOM - 6);
+      FX.explosion(x, y, { color: PC[p], size: 1.1 });
+      FX.shake(0.6);
+      FX.flash(PC[p], 0.25, 0.18);
+      anim.pipAt[p] = now(); anim.pointAt = now();
+      anim.trail.length = 0;
+      if (S.matchWinner >= 0) FX.confetti(W / 2, 120, { colors: [PC[p], FX.mix(PC[p], '#ffffff', 0.5), C.ruler], count: 120, speed: 230 });
+    },
+    over() { anim.overAt = now(); anim.confettiAt = now(); }
+  };
+
+  // =====================================================================
+  // DRAWING
+  // =====================================================================
+  const SH = {
+    paddle: p => FX.shape('pg-pad' + p, PAD_W, PAD_H, g => {
+      FX.roundRect(g, 0, 0, PAD_W, PAD_H, 2); g.fillStyle = PC[p]; g.fill();
+      FX.roundRect(g, 0.9, 2, 1.2, PAD_H - 4, 0.6); g.fillStyle = FX.mix(PC[p], '#ffffff', 0.55); g.fill();
+    }, { color: PC[p], glow: 5, strong: true }),
+    ball: c => FX.shape('pg-ball' + c, BALL + 1, BALL + 1, g => {
+      g.fillStyle = c; g.beginPath(); g.arc((BALL + 1) / 2, (BALL + 1) / 2, (BALL + 1) / 2, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#ffffff'; g.beginPath(); g.arc((BALL + 1) / 2, (BALL + 1) / 2, 1.1, 0, Math.PI * 2); g.fill();
+    }, { color: c, glow: 5, strong: true }),
+    pipOn: p => FX.shape('pg-pip' + p, 6, 6, g => { g.fillStyle = PC[p]; g.beginPath(); g.arc(3, 3, 3, 0, Math.PI * 2); g.fill(); }, { color: PC[p], glow: 4 }),
+    pipOff: () => FX.shape('pg-pipoff', 6, 6, g => { g.strokeStyle = '#4a4380'; g.lineWidth = 0.8; g.beginPath(); g.arc(3, 3, 2.5, 0, Math.PI * 2); g.stroke(); }, { glow: 0 })
+  };
+  const T = (s, x, y, color, size = 8, o = {}) => FX.drawText(ctx, s, x, y, Object.assign({ size, color }, o));
+
+  function drawField() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0b0819'); g.addColorStop(0.5, '#120d2a'); g.addColorStop(1, '#07060f');
+    ctx.fillStyle = g; ctx.fillRect(-10, -10, W + 20, H + 20);
+    ctx.strokeStyle = FX.rgba(C.pink, 0.05); ctx.lineWidth = 0.4;    // faint grid
+    for (let x = 0; x <= W; x += 16) { ctx.beginPath(); ctx.moveTo(x, TOP); ctx.lineTo(x, BOTTOM); ctx.stroke(); }
+    for (let y = TOP + 11; y < BOTTOM; y += 16) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    // big faint scores in the background, like an old arcade cabinet
+    if (S.state !== 'title') {
+      T(String(S.score[0]), 80, 100, FX.rgba(C.p1, 0.08), 64, { glow: 0 });
+      T(String(S.score[1]), 240, 100, FX.rgba(C.p2, 0.08), 64, { glow: 0 });
+    }
+    // glowing walls and the net
+    for (const [y, a] of [[TOP - 0.6, 0.9], [BOTTOM + 0.2, 0.9]]) {
+      if (!FX.low) { ctx.fillStyle = FX.rgba(C.pink, 0.18); ctx.fillRect(0, y - 1.2, W, 2.8); }
+      ctx.fillStyle = FX.rgba(C.pink, a); ctx.fillRect(0, y, W, 0.5);
+    }
+    ctx.fillStyle = FX.rgba(C.pink, 0.35);
+    for (let y = TOP + 3; y < BOTTOM; y += 7) ctx.fillRect(159.6, y, 0.8, 3.5);
+    if (!FX.low) {                                  // soft light on each player's side
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.1;
+      ctx.drawImage(FX.glowDot(C.p1), -60, S.pad[0] + PAD_H / 2 - 50, 120, 100);
+      ctx.drawImage(FX.glowDot(C.p2), W - 60, S.pad[1] + PAD_H / 2 - 50, 120, 100);
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  function drawPaddles() {
+    for (let p = 0; p < 2; p++) {
+      // squash on a hit: wider and shorter for a moment, pushed back a little
+      const k = Math.max(0, 1 - (now() - anim.padHitAt[p]) / 180), sq = FX.ease.outQuad(k) * (anim.power[p] ? 1.4 : 1);
+      const cx = PAD_X[p] + PAD_W / 2 + (p === 0 ? -1.5 : 1.5) * sq, cy = S.pad[p] + PAD_H / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(1 + sq * 0.7, 1 - sq * 0.22);
+      FX.drawShape(ctx, SH.paddle(p), 0, 0);
+      ctx.restore();
+    }
+  }
+
+  function drawBall() {
+    const b = S.ball;
+    if (!b || S.state === 'point') return;
+    const cx = b.x + BALL / 2, cy = b.y + BALL / 2, col = ballColor();
+    if (S.state === 'serve') {                      // ring shrinks while the serve counts down
+      const k = Math.min(1, (S.clock - S.stateAt) / SERVE_DELAY);
+      ctx.strokeStyle = FX.rgba(C.ink, 0.6 * (1 - k)); ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.arc(cx, cy, 4 + 18 * (1 - FX.ease.outCubic(k)), 0, Math.PI * 2); ctx.stroke();
+      FX.drawShape(ctx, SH.ball(col), cx, cy, { scale: 1 + Math.sin(S.clock * 14) * 0.15 });
+      return;
+    }
+    // glowing trail behind the ball: longer when it's faster
+    const tr = anim.trail;
+    tr.push(cx, cy);
+    const maxLen = 2 * Math.round(6 + 12 * (S.speed - BALL_START) / (BALL_MAX - BALL_START));
+    while (tr.length > maxLen) tr.splice(0, 2);
+    if (tr.length >= 4) {
+      ctx.lineCap = 'round';
+      for (let i = 2; i < tr.length; i += 2) {
+        const a = i / tr.length;
+        ctx.strokeStyle = FX.rgba(col, a * 0.55);
+        ctx.lineWidth = a * BALL * 0.95;
+        ctx.beginPath(); ctx.moveTo(tr[i - 2], tr[i - 1]); ctx.lineTo(tr[i], tr[i + 1]); ctx.stroke();
+      }
+      if (!FX.low) {
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < tr.length; i += 4) {
+          const a = i / tr.length, r = 2 + a * 5;
+          ctx.globalAlpha = a * 0.35;
+          ctx.drawImage(FX.glowDot(col), tr[i] - r, tr[i + 1] - r, r * 2, r * 2);
+        }
+        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+    FX.drawShape(ctx, SH.ball(col), cx, cy);
+  }
+
+  function panel(x, y, w, h, color = C.pink) {
+    FX.roundRect(ctx, x, y, w, h, 5);
+    ctx.fillStyle = 'rgba(10,8,24,.88)'; ctx.fill();
+    ctx.strokeStyle = FX.rgba(color, 0.7); ctx.lineWidth = 0.7; ctx.stroke();
+  }
+
+  // ready / hits on small plates on the title and match-over screens
+  function drawReadouts() {
+    if (S.state !== 'title' && S.state !== 'over') return;
+    [80, 240].forEach((x, p) => {
+      const readyText = S.ready[p] ? 'READY!' : pressText(p);
+      const pop = S.ready[p] ? Math.max(0.01, FX.ease.outBack(Math.min(1, (now() - anim.readyAt[p]) / 300))) : 1;
+      panel(x - 34, 140, 68, 26, PC[p]);
+      if (S.state === 'title') {
+        T(readyText, x, 149, S.ready[p] ? PC[p] : C.ink, 8, { scale: pop });
+        T(MOVE_LABEL[p], x, 159, C.muted, 6, { glow: 0 });
+      } else {
+        T('HITS ' + S.hits[p], x, 149, PC[p], 8);
+        T(readyText, x, 159, S.ready[p] ? PC[p] : C.ink, 6, { glow: 0, scale: pop });
+      }
+    });
+  }
+
+  function drawCenter() {
+    const cx = W / 2;
+    if (S.state === 'title') {
+      panel(98, 52, 124, 72);
+      const bob = Math.sin(FX.time * 2.5) * 1.5;
+      T('PIXEL', cx, 70 + bob, C.p1, 18);
+      T('PONG', cx, 91 - bob, C.p2, 18);
+      T('FIRST TO 5', cx, 112, C.muted, 7, { glow: 0 });
+      return;
+    }
+    if (S.state === 'over') {
+      const m = S.matchWinner;
+      panel(92, 48, 136, 76, PC[m]);
+      const enter = Math.min(1, (now() - anim.overAt) / 900);   // the name drops in and bounces
+      const y = FX.lerp(34, 70, FX.ease.outBounce(enter)) - (enter >= 1 ? Math.abs(Math.sin(FX.time * 3.2)) * 3 : 0);
+      const nameSize = Math.min(20, 118 / Math.max(1, FX.textSprite(NAMES[m], { size: 20 }).w / 20));
+      T(NAMES[m], cx, y, PC[m], nameSize);
+      T('WINS!', cx, 93, PC[m], 15, { scale: 1 + Math.sin(FX.time * 6) * 0.04 });
+      T(CPU ? 'PRESS ' + KEY_LABEL[0] : 'BOTH PRESS', cx, 113, C.muted, 7, { glow: 0 });
+      return;
+    }
+    if (S.state === 'point') {
+      const msg = NAMES[S.lastPoint] + ' POINT', col = PC[S.lastPoint];
+      const scale = Math.max(0.01, FX.ease.outBack(Math.min(1, (now() - anim.pointAt) / 300)));
+      const bw = Math.max(112, FX.textSprite(msg, { size: 9, color: col }).w + 18);
+      panel(cx - bw / 2, 78, bw, 26, col);
+      T(msg, cx, 91, col, 9, { scale });
+    }
+  }
+
+  function drawHud() {
+    const g = ctx.createLinearGradient(0, 0, 0, 22);
+    g.addColorStop(0, 'rgba(14,12,28,.95)'); g.addColorStop(1, 'rgba(14,12,28,.75)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 22);
+    T(NAMES[0], 7, 11, C.p1, 10, { align: 'left' });
+    T(NAMES[1], W - 7, 11, C.p2, 10, { align: 'right' });
+    // 5 score dots after each name; a new point pops in
+    const w0 = FX.textSprite(NAMES[0], { size: 10, color: C.p1 }).w, w1 = FX.textSprite(NAMES[1], { size: 10, color: C.p2 }).w;
+    for (let i = 0; i < WIN_SCORE; i++) {
+      [[7 + w0 + 7 + i * 8, 0], [W - 7 - w1 - 7 - i * 8, 1]].forEach(([x, p]) => {
+        const on = S.score[p] > i;
+        const fresh = on && i === S.score[p] - 1 ? Math.min(1, (now() - anim.pipAt[p]) / 350) : 1;
+        FX.drawShape(ctx, on ? SH.pipOn(p) : SH.pipOff(), x, 11, { scale: on ? Math.max(0.01, FX.ease.outElastic(fresh)) : 1 });
+      });
+    }
+    const mid = S.state === 'title' ? 'FIRST TO 5' : (S.state === 'over' ? 'MATCH OVER' : 'RALLY ' + S.rally);
+    const pop = S.state === 'play' ? 1 + 0.25 * Math.max(0, 1 - (now() - anim.rallyAt) / 200) : 1;
+    T(mid, W / 2, 11, S.rally >= 10 && S.state === 'play' ? C.ruler : C.muted, 8, { glow: 0, scale: pop });
+  }
+
+  function draw() {
+    st.begin();
+    drawField();
+    drawPaddles();
+    drawBall();
+    drawReadouts();
+    drawCenter();
+    FX.draw(ctx);                                   // sparks, explosions, confetti and pop-up texts
+    st.steady();                                    // the score bar doesn't shake
+    drawHud();
+    if (!focused) {
+      ctx.fillStyle = 'rgba(7,6,15,.8)'; ctx.fillRect(0, 22, W, H - 22);
+      T('CLICK HERE TO PLAY', W / 2, 96, C.ink, 11);
+      T('SO THE KEYBOARD GOES TO THE GAME', W / 2, 110, C.muted, 7, { glow: 0 });
+    }
+    st.end();
+  }
+
+  // ---------- Game loop ----------
+  // The game moves in fixed 1/120 s steps, so it runs at the same speed on every screen.
+  // While the page doesn't have the keyboard, the game is paused.
+  let last = null, acc = 0;
+  function loop(ts) {
+    const dt = last == null ? 0 : Math.min(0.1, (ts - last) / 1000);
+    last = ts;
+    if (focused) {
+      acc += dt;
+      while (acc >= STEP) { update(STEP); acc -= STEP; }
+      FX.update(dt);
+      if (S.state === 'over' && now() - anim.confettiAt > 1400) {   // winner screen: keep the confetti coming
+        anim.confettiAt = now();
+        const m = S.matchWinner;
+        FX.confettiRain(0, W, 0, { colors: [PC[m], FX.mix(PC[m], '#ffffff', 0.5), C.ruler], count: 26 });
+      }
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>

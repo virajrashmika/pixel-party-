@@ -1,0 +1,86 @@
+/* Pixel Party - shared styles for every page (menu + all games). "Neon arcade" look.
+   Change a color or font here and every page follows. */
+
+/* Russo One = titles, Rajdhani = text.
+   Press Start 2P stays loaded because game screens that are not upgraded yet still draw with it. */
+@import url("https://fonts.googleapis.com/css2?family=Russo+One&family=Rajdhani:wght@500;600;700&family=Press+Start+2P&display=swap");
+
+:root{
+  /* page colors */
+  --bg:#07060f; --panel:#120f26; --panel-2:#1a1636; --edge:rgba(190,170,255,.16);
+  --neon:#b45cff; --pink:#ff4fd8;
+  /* colors the game screens read too: keep these values */
+  --line:#3a3366; --screen:#0e0c1c; --dot:#211d40;
+  --ink:#f1ecff; --muted:#9a92c4; --bad:#ff4f6d;
+  --p1:#ff7a59; --p2:#4fd1e8;          /* Player 1 = orange, Player 2 = cyan */
+  --ruler:#f4c542;                     /* yellow: highlights and keyboard focus */
+  /* fonts */
+  --font-title:"Russo One","Orbitron","Segoe UI",system-ui,sans-serif;
+  --font-ui:"Rajdhani","Segoe UI",system-ui,sans-serif;
+  --font-display:var(--font-title);    /* names the game pages already use */
+  --font-body:var(--font-ui);
+  --font-pixel:"Press Start 2P",ui-monospace,"Courier New",monospace;
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:var(--font-ui);font-weight:500;font-size:18px;line-height:1.4;padding-inline:16px;padding-block:20px 36px}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:20px}
+
+/* ---------- titles ---------- */
+h1{font-family:var(--font-title);font-weight:400;font-size:clamp(22px,4vw,34px);margin:0;letter-spacing:.03em;text-wrap:balance}
+.a{color:var(--p1)} .b{color:var(--p2)}   /* .a = player 1 color, .b = player 2 color */
+.tag{color:var(--muted);margin:4px 0 0}
+
+/* ---------- buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--font-ui);font-weight:700;font-size:14px;letter-spacing:.1em;text-transform:uppercase;line-height:1.2;
+  color:var(--ink);background:rgba(255,255,255,.04);border:1px solid var(--edge);border-radius:10px;
+  padding:10px 16px;cursor:pointer;text-decoration:none;
+  transition:border-color .15s,box-shadow .15s,transform .15s;
+}
+.btn:hover{border-color:var(--neon);box-shadow:0 0 0 1px rgba(180,92,255,.35),0 0 18px rgba(180,92,255,.25)}
+.btn[aria-pressed="false"]{color:var(--muted)}
+.btn-big{
+  font-family:var(--font-title);font-weight:400;font-size:18px;letter-spacing:.08em;padding:14px 28px;border:0;border-radius:12px;
+  color:#07060f;background:linear-gradient(90deg,var(--p1),var(--pink) 50%,var(--p2));
+  box-shadow:0 0 24px rgba(255,79,216,.35);
+}
+.btn-big:hover{transform:translateY(-2px);box-shadow:0 0 34px rgba(255,79,216,.55)}
+.btn-big:active{transform:translateY(1px)}
+.btn-big:disabled{background:var(--panel-2);color:var(--muted);box-shadow:none;cursor:not-allowed;transform:none}
+
+/* ---------- keyboard keys ---------- */
+kbd{
+  display:inline-block;font-family:var(--font-ui);font-weight:700;font-size:14px;color:var(--ink);
+  background:#0b0918;border:1px solid var(--edge);border-bottom-width:3px;border-radius:7px;
+  padding:3px 9px;min-width:2.1em;text-align:center;line-height:1.4
+}
+
+/* ---------- on/off switch (used for "Low effects") ---------- */
+.switch{
+  display:inline-flex;align-items:center;gap:10px;padding:6px 8px 6px 12px;
+  font-family:var(--font-ui);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);background:rgba(255,255,255,.03);border:1px solid var(--edge);border-radius:999px;cursor:pointer
+}
+.switch::after{                                   /* the track with its round knob */
+  content:"";width:34px;height:18px;border-radius:999px;flex:none;
+  background:radial-gradient(circle at 9px 50%,var(--muted) 6px,transparent 7px),#0b0918;
+  border:1px solid var(--edge);transition:background .2s
+}
+.switch[aria-checked="true"]{color:var(--ruler)}
+.switch[aria-checked="true"]::after{background:radial-gradient(circle at 25px 50%,var(--ruler) 6px,transparent 7px),rgba(244,197,66,.15)}
+
+/* Yellow outline shows where the keyboard is */
+:focus-visible{outline:2px solid var(--ruler);outline-offset:3px}
+
+/* "Low effects": no glows */
+.low-fx .btn-big,.low-fx .btn:hover{box-shadow:none}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
